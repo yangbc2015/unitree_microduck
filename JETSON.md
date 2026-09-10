@@ -20,8 +20,17 @@ so the fork stays small enough to keep merging upstream.
 ## Where the port stands
 
 The status table, the measurements behind each row, and the open items live in
-[`docs/project/jetson-port.md`](docs/project/jetson-port.md). In one line: the whole workspace
-builds natively, the camera path is ported, and the servo bus, IMU, audio and depth are not.
+[`docs/project/jetson-port.md`](docs/project/jetson-port.md). In one line: the whole workspace builds
+natively; the camera path is ported and the console's sessions - the video and the control channel it
+opens beside it - are verified end to end against a browser; and the servo bus, IMU, audio and depth
+are not, so this board can be watched but not driven.
+
+Two facts about this board settle most of what reads like a code problem. Its release tree,
+`/opt/robot/daemon/releases/<version>/bin` with `current` symlinked to it, **is installed as a release
+or not at all** - `scripts/deploy-jetson-binaries.sh` - because `hello` is answered by `updaterd` and
+`robot.policies` by `robotd`, so a tree one release deep answers the console in two versions at once.
+And board deltas that cannot be a config key are systemd drop-ins under `deploy/jetson/`, which is
+where the two this port needs live.
 
 ## The seam that already exists
 
@@ -46,11 +55,14 @@ Dynamixel semantics with no S288 equivalent, to be absorbed inside the new impl:
 ## Delta map
 
 Additive (no core changes):
-- `duck-control/src/bus_s288.rs`: a `RobotIo` impl speaking the Unitree S288 protocol
+- `duck-control/src/bus_s288.rs`: **not written yet.** A `RobotIo` impl speaking the Unitree S288 protocol
   (docs and examples: github.com/unitreerobotics/digital_servo - `specs/protocol.md`,
   `python/servo_demo.py`). CRC plus the position/speed conversion factors.
-- IMU: an LSM6DSV16X reader over I2C, feeding `Sensors.imu` from the same `read()`.
-- `deploy/jetson/*.toml`: serial port, camera device, model paths, policy slots.
+- IMU: **not written yet.** An LSM6DSV16X reader over I2C, feeding `Sensors.imu` from the same
+  `read()`.
+- `deploy/robotd.toml`: serial port, camera device, model paths, policy slots. Installed to
+  `/etc/robot/robotd.toml` by `scripts/deploy-jetson-skeleton.sh` and only when the board has none -
+  the file on a running robot is the robot's, not the tree's.
 - `deploy/jetson/10-argus-socket.conf`: **in use now.** A systemd drop-in for `mediad.service`, not
   an edit to it. Upstream's unit sets `PrivateTmp=yes`, which on this board hides
   `/tmp/argus_socket` - where `nvargus-daemon` listens - so `nvarguscamerasrc` cannot reach the
@@ -62,12 +74,18 @@ Additive (no core changes):
   default is 90 because that is the Radxa's mount. The Arducam here sits square in its bracket, so
   without this the console rotates a correct picture a quarter turn and the video arrives sideways.
   `--rotate 0` has no `[media]` key - the mount is hardware, not a setting - hence a drop-in.
-- `scripts/deploy-jetson-binaries.sh`: builds the workspace and installs **every** binary into the
-  release tree, backing the old one up first. Installing only the daemon that changed is what left
-  this board's `0.11.0-jetson` tree holding `0.10.0` binaries, with `hello` (answered by `updaterd`)
-  and `robot.policies` (answered by `robotd`) disagreeing in the console's own drawer.
-- `scripts/setup-jetson-*.sh`: the Jetson counterparts of `setup-npu.sh`, `setup-rkaiq.sh`,
-  `setup-gstreamer.sh`, `scripts/provision-board.sh`, plus the preinstall hook.
+- `scripts/deploy-jetson-skeleton.sh`: the non-code half of the install, and idempotent: the units,
+  the `robot` group and the other daemon users, the state directory, the journald drop-in, the two
+  `deploy/jetson/*.conf` drop-ins, and `deploy/robotd.toml` to `/etc/robot/` when the board has none.
+- `scripts/deploy-jetson-binaries.sh`: the code half - builds the workspace and installs **every**
+  binary into the release tree, backing the old one up first. Installing only the daemon that changed
+  is what left this board's `0.11.0-jetson` tree holding `0.10.0` binaries, with `hello` (answered by
+  `updaterd`) and `robot.policies` (answered by `robotd`) disagreeing in the console's own drawer.
+- `scripts/ipc_probe.py`: JSON-RPC over a daemon's unix socket, which is how a board with no hardware
+  gets asked what it thinks.
+
+The Jetson counterparts of `setup-npu.sh` and `setup-rkaiq.sh` have no reason to exist here: there is
+no NPU runtime to install and no `rkaiq` to replace.
 
 Core patches, kept as small as possible:
 - `robotd/src/main.rs`: the `BusIo` alias and `open_bus()`. Not started.
@@ -78,8 +96,11 @@ Core patches, kept as small as possible:
   `pipeline.rs` also carries one fix nothing on this board caused: the valved H.264 branch's
   `AppSink` sets `async(false)`, because a shut `valve` starves its sink, an async sink waits for a
   buffer, and the whole pipeline then never leaves PREROLLING - which is what made the signalling
-  server report no producer at all. `docs/project/jetson-port.md` has the measurements, and items 10
-  and 11 have the two failures that stood between a working camera and a picture in a browser.
+  server report no producer at all. `docs/project/jetson-port.md` has the measurements: items 10 and
+  11 are the two failures that stood between a working camera and a picture in a browser, and items
+  12 to 14 are the ones the console's own drawer found afterwards - a release tree installed one
+  binary at a time, a mount angle that belonged to the other board, and `system.info` failing on a
+  board with no NetworkManager.
 
 Environment, which is part of the port rather than of the code: `scripts/setup-gstreamer.sh` lists
 `gstreamer1.0-nice`, and a board that has only `libnice10` gets a `webrtcbin` with no ICE - every

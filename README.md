@@ -48,9 +48,13 @@ nothing else that matters: the capture path, the video encoder, the servo bus an
 | capture | rkisp, `v4l2src` on `/dev/video0` | Argus, `nvarguscamerasrc` on a CSI port | ported |
 | exposure | `rkaiq` 3A, plus a software loop | the ISP, which never stops converging | ported |
 | H.264 | `mpph264enc` on the Rockchip VPU | no encoder at all, so `x264enc` | ported |
-| WebRTC | `webrtcsink` from `microduck-gst-plugins`, patched | `webrtcsink` from `gst-plugins-rs`, stock | build step |
+| WebRTC | `webrtcsink` from `microduck-gst-plugins`, patched | `webrtcsink` from `gst-plugins-rs`, stock | ported |
 | detector | RKNN on the NPU | none yet; unported upstream too | open |
 | audio | AIC3104 on I2C3 | nothing chosen | open |
+
+The camera is ported and a browser has been watching it: capture, software H.264, signalling, ICE and
+the control datachannel the console opens beside the video are all verified end to end on the board.
+The servo bus and the IMU are what is left of the port, so this board can be watched but not driven.
 
 **The build is not the port and the port is not the build.** Everything compiles on the board
 because the vendor-specific pieces were already reached at runtime upstream - `librknnrt.so` and the

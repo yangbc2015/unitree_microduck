@@ -2,7 +2,9 @@
 
 This fork runs the daemons on a **Jetson Orin Nano Super DevKit** instead of the Radxa Zero 3W
 upstream targets. Both are aarch64 Linux, which is where the similarity ends: the capture path, the
-video encoder, the servo bus and the IMU all differ, and only the first two have been ported.
+video encoder, the servo bus and the IMU all differ. The first two are ported, and the console's
+sessions - the video and the control channel it opens beside it - are verified end to end against a
+browser. The servo bus and the IMU are not, so this board can be watched but not driven.
 
 Everything here is measured on the board unless it says otherwise, and the numbers are the point -
 they are what says whether a difference is a port or a project.
@@ -17,11 +19,11 @@ they are what says whether a difference is a port or a project.
 | capture | rkisp, `v4l2src` on `/dev/video0` | Argus, `nvarguscamerasrc` on a CSI port | ported |
 | exposure | `rkaiq_3A_server` plus a software loop | the ISP, which never stops converging | ported |
 | H.264 | `mpph264enc`, Rockchip VPU | **no hardware encoder at all**, so `x264enc` | ported |
-| WebRTC | `webrtcsink` from the `microduck-gst-plugins` release, patched to know `mpph264enc` | `webrtcsink` from `gst-plugins-rs`, stock | build step |
+| WebRTC | `webrtcsink` from the `microduck-gst-plugins` release, patched to know `mpph264enc` | `webrtcsink` from `gst-plugins-rs`, stock | ported |
 | detector | RKNN on the NPU (`.rknn`) | none; the `.onnx` path would be CPU | open |
 | audio | AIC3104 on I2C3, AIC3x DKMS | nothing chosen | open |
 | depth | VL53L5CX/L8CX over I2C | same sensor class would apply | unverified |
-| provisioning | `setup-rkaiq.sh`, `setup-npu.sh`, `setup-gstreamer.sh`, `provision-board.sh` | needs its own counterparts | partial |
+| provisioning | `setup-rkaiq.sh`, `setup-npu.sh`, `setup-gstreamer.sh`, `provision-board.sh` | `scripts/deploy-jetson-skeleton.sh` and `scripts/deploy-jetson-binaries.sh`; no NPU or `rkaiq` counterpart to write | partial |
 
 The detector row is open on both boards, which is worth knowing before treating it as work this
 fork introduced: `npu-bringup.md` says nothing on the robot can get a frame yet, and no behaviour
@@ -228,15 +230,15 @@ The evidence, in the order the page walks it:
                     -> peer {ice: candidate ... 10.65.32.235 ... } and a STUN srflx candidate
     /run/mediad/camera.json -> {"fps":30.0,"targetFps":30,"width":1280,"height":720,"dropped":0}
 
-What is still unverified is the rest of the console rather than the video, and the control channel is
-now checked the same way - from the console's own drawer, in a browser at the keyboard:
+The control channel beside that video is checked the same way - from the console's own drawer, in a
+browser at the keyboard - and its lines are worth reading as the console sees them:
 
     datachannel: control
-    control → {"jsonrpc":"2.0","id":1,"method":"hello","params":{"api_version":27}}
-    control ← {"jsonrpc":"2.0","id":1,"result":{"api_version":16,"daemon_version":"0.10.0",...}}   item 12
-    control ← {"jsonrpc":"2.0","id":4,"error":{"code":-32601,"message":"unknown method \"robot.policies\""}}   item 12
-    control ← {"jsonrpc":"2.0","id":6,"error":{"code":-32603,"message":"Config is not answering: ..."}}   item 14
-    control ← net.connect, system.pairingPin -> "is not available over WebRTC"   the route table, working
+    control -> {"jsonrpc":"2.0","id":1,"method":"hello","params":{"api_version":27}}
+    control <- {"jsonrpc":"2.0","id":1,"result":{"api_version":16,"daemon_version":"0.10.0",...}}   item 12
+    control <- {"jsonrpc":"2.0","id":4,"error":{"code":-32601,"message":"unknown method \"robot.policies\""}}   item 12
+    control <- {"jsonrpc":"2.0","id":6,"error":{"code":-32603,"message":"Config is not answering: ..."}}   item 14
+    control <- net.connect, system.pairingPin -> "is not available over WebRTC"   the route table, working
 
 so the transport, the JSON-RPC framing and the route table are all exercised end to end; what the
 first three lines turned up were a release tree that was one version behind and a mount angle that
@@ -244,11 +246,11 @@ was one board out (items 12 and 13, both fixed). The same drawer, after those tw
 browser that reported them:
 
     datachannel: control
-    control → {"jsonrpc":"2.0","id":1,"method":"hello","params":{"api_version":27}}
-    control ← {"jsonrpc":"2.0","id":1,"result":{"api_version":27,"daemon_version":"0.11.0","revision":null}}
+    control -> {"jsonrpc":"2.0","id":1,"method":"hello","params":{"api_version":27}}
+    control <- {"jsonrpc":"2.0","id":1,"result":{"api_version":27,"daemon_version":"0.11.0","revision":null}}
     video 1280x720, camera mounted 0° off upright
     3 skill(s): roulade, kick_left, kick_right
-    control ← {"jsonrpc":"2.0","id":6,"error":{"code":-32603,"message":"Config is not answering: ..."}}
+    control <- {"jsonrpc":"2.0","id":6,"error":{"code":-32603,"message":"Config is not answering: ..."}}
 
 The version the page compares itself against now agrees with it, the mount line reads 0 and the
 picture stands up, `robot.policies` comes back as the three skills the page lists, and the one line
@@ -269,7 +271,9 @@ One thing about the console worth knowing before calling it broken: **the page o
 ## What the port changed
 
 Four files, one of them new. The shape is deliberate: everything additive went into a new module,
-and the existing files got an arm each rather than a rewrite.
+and the existing files got an arm each rather than a rewrite. Everything else this fork adds is a new
+file rather than an edit - the two drop-ins under `deploy/jetson/`, the deploy scripts and the probe
+under `scripts/`, and these two documents - which is the branch rule `JETSON.md` opens with.
 
 | file | change |
 |---|---|
@@ -314,9 +318,21 @@ in the pipeline: nothing between it and the driver.
 
 ## Running it
 
-    cargo build --release --bins
+On a board that already has the skeleton, the whole install is one script:
 
-and then, with the camera on CAM0 and the test pattern as the fallback:
+    scripts/deploy-jetson-binaries.sh
+
+It builds the workspace, backs the current release tree up under `/opt/robot/daemon/backups/`,
+installs **every** binary into `releases/<version>/bin` - all of them or none, because `hello` is
+answered by `updaterd` and `robot.policies` by `robotd`, so a tree that is one release deep answers
+the console in two versions at once - restarts the enabled units, and prints what each socket now
+says. `scripts/deploy-jetson-skeleton.sh` is the non-code half: units, users, the two drop-ins under
+`deploy/jetson/`, and `deploy/robotd.toml` to `/etc/robot/` only when the board has none.
+
+By hand, `cargo build --release --bins` and then `sudo install -m755 target/release/<name>
+/opt/robot/daemon/current/bin/` once per daemon, which is the mistake item 12 is about.
+
+Then, with the camera on CAM0 and the test pattern as the fallback:
 
     [media]
     camera = true
@@ -455,9 +471,9 @@ nothing on the page says ICE was never available.
 **12. `hello` answered `api_version: 16` for a robot whose `robotd` was a fresh 0.11.0 build.** With
 the picture up and the drawer open, two of its lines disagreed with an otherwise working robot:
 
-    control → {"jsonrpc":"2.0","id":1,"method":"hello","params":{"api_version":27}}
-    control ← {"jsonrpc":"2.0","id":1,"result":{"api_version":16,"daemon_version":"0.10.0",...}}
-    control ← {"jsonrpc":"2.0","id":4,"error":{"code":-32601,"message":"unknown method \"robot.policies\""}}
+    control -> {"jsonrpc":"2.0","id":1,"method":"hello","params":{"api_version":27}}
+    control <- {"jsonrpc":"2.0","id":1,"result":{"api_version":16,"daemon_version":"0.10.0",...}}
+    control <- {"jsonrpc":"2.0","id":4,"error":{"code":-32601,"message":"unknown method \"robot.policies\""}}
 
 `hello` is the handshake the console compares its own version against, and `robot.policies` is a
 method it calls on every connect. Neither is a protocol problem, and neither is the page's: `hello`
@@ -524,9 +540,10 @@ buttons "refused" - those two are the route table being consulted, not a robot t
   for the S288 protocol, `robotd` retries `/dev/ttyS2` and runs without a body.
 - **IMU.** Upstream reads it on the servo bus in the same transaction as the joints; the fork's
   LSM6DSV16X is on I2C, so it becomes part of that same `read()` rather than a second source.
-- **Rotation and intrinsics.** The mount angle is configuration (`--rotate`), and the family
-  calibration in `robotd-params` was solved for the Radxa's module. The Arducam IMX219 is the same
-  sensor with the same 62 degree field, so the nominal figures should hold - a calibration is the
-  only thing that says so.
+- **Intrinsics.** The mount angle is settled - `deploy/jetson/20-mount.conf` says 0 for this board,
+  and item 13 is what says so - but the family calibration in `robotd-params` was solved for the
+  Radxa's module. The Arducam IMX219 is the same sensor with the same 62 degree field, so the nominal
+  figures should hold, and a calibration is the only thing that says so. Nothing on this board
+  consumes them yet: the detector that would is off, and no behaviour reads a detection.
 - **Audio and depth.** Unported, and unstarted: `deploy/audio` is a Radxa device-tree and codec
   combination, and `tofd` has not been run against a sensor on this board.
