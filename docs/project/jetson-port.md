@@ -291,11 +291,81 @@ default source is a test pattern, which is what makes a session verifiable with 
 - it is the right first run on a new board, because it exercises signalling, the datachannel and
 the encoder with the capture path out of the picture.
 
+## What bit on the way
+
+Nine failures, in the order they were hit. Each one cost more than it should have, which is the
+reason they are written down: seven of the nine had a symptom that pointed somewhere else.
+
+**1. `no webrtcsink`, then `property 'run-signalling-server' not found`.** `gst-plugins-rs` builds
+`webrtcsink` for whichever series matches the GStreamer underneath. The 0.13 series moved the
+in-process signalling server out into a separate `gst-webrtc-signalling-server` binary, so the three
+properties `mediad` sets are gone there and a `set_property` on a missing name panics. 0.14 is the
+series pinned to `gst-rs` 0.24, the same one the daemons use, and it still has them. Check the
+properties with `gst-inspect-1.0 webrtcsink`, not the branch name.
+
+**2. `linking a tee branch failed: Noformat`.** The tee carries `UYVY` and `x264enc` has no `UYVY`
+sink. `Noformat` names the tee, so it reads as a caps mystery. Reproducing it in `gst-launch` names
+both ends: `could not link videoscale0 to x264enc0`.
+
+**3. `property 'profile' of type 'GstX264Enc' not found`, and the process aborted.** The `profile` in
+`x264enc`'s caps is a *caps field*; the encoder has no such property. Worse, the panic was inside a
+GObject signal handler, where it cannot unwind: it takes the daemon down with a backtrace that never
+mentions the property.
+
+**4. `property 'key-int-max' ... expected: 'guint', got: 'gint'`.** Same abort, same handler, a
+value of the wrong type. Both of these are why `wire_encoder_setup`'s arm checks names before it sets
+them.
+
+**5. `ERROR nvenc gstnvenc.c: NvEncOpenEncodeSessionEx failed`, every start.** The `nvenc` plugin is
+installed, has no encode hardware to open a session on, and says so while failing to register its
+encoders. It looks like a fault and is not: an element that fails to register is not there at all,
+so `gst-inspect-1.0 nvh264enc` answers "no such element" and `webrtcsink` cannot pick it. Ask
+`gst-inspect`, not the journal.
+
+**6. The expensive one: the session came up, the browser connected, and there was no picture.**
+
+    (Argus) Error 0x00030003: Connecting to nvargus-daemon failed: No such file or directory
+    Error generated. gstnvarguscamerasrc.cpp, execute:940 Failed to create CameraProvider
+
+`nvargus-daemon` listens on `/tmp/argus_socket`, and upstream's unit sets `PrivateTmp=yes`. Inside
+the unit's private `/tmp` the socket does not exist, so `nvarguscamerasrc` cannot reach the daemon
+and never captures a frame - while the pipeline builds, the signalling server listens, the port
+answers, and the failure surfaces in the browser as a video problem. `deploy/jetson/10-argus-socket.conf`
+binds that one path in, keeping the private `/tmp`; see the file for why it is a drop-in and why it
+is `After=nvargus-daemon.service`.
+
+**The lesson under it: a built pipeline is not a frame.** `mediad::platform`'s "head camera through
+Argus" line is emitted when the capture bin is *built*, and "signalling server listening" when the
+pipeline reaches PLAYING. Both were true for hours while nothing was being captured, and both were
+read as proof that the camera worked. What answers the question is `sudo lsof /dev/video0` - with
+the socket hidden, nothing holds the camera - or a count of the frames that came out.
+
+**7. `Failed to create CaptureSession` when probing the camera by hand.** Argus allows one session at
+a time, so while `mediad` holds it, the obvious sanity check (`gst-launch-1.0 nvarguscamerasrc ...`)
+fails and looks like the camera is broken. `sudo systemctl stop mediad` first.
+
+**8. A second `gst-launch` was not needed to prove the second point, but the first attempt proved
+nothing either.** It ran as `sudo -u mediad`, which does not carry the supplementary groups the unit
+grants (`SupplementaryGroups=video render robot`), so NVMM failed to initialise and the test failed
+for a reason that had nothing to do with the question. `sudo setpriv --reuid=mediad --regid=mediad
+--groups=44,993,978` is the faithful equivalent; `systemd-run --uid=mediad` was not.
+
+**9. Environment leaks between the proxy and the tests.** With `http_proxy` exported, `curl` to a
+local service answers the *proxy's* 502 (which reads as "the console is down"), and two of `mediad`'s
+own tests fail because they assert on connection *errors* that a proxy changes. Unset the proxy for
+local checks and for `cargo test`; `curl --noproxy '*'` for the console. `cargo`'s git dependencies
+need the opposite: `https_proxy=... CARGO_NET_GIT_FETCH_WITH_CLI=true`, because `libgit2` ignores
+`http_proxy` and otherwise the build sits at 0% CPU forever.
+
 ## Open items
 
-- **An end-to-end session.** The pipeline builds and runs; no browser has been connected to this
-  board yet, so the signalling server, the control datachannel and the raw-frame request are
-  unverified here. `Source::Test` is how to tell those apart from the camera.
+- **An end-to-end session, and one picture.** A browser has now been connected to this board and got
+  no video - which turned out to be the Argus socket in item 6 above, not the session. After the
+  drop-in the capture holds the camera (`lsof /dev/video0` answers `nvargus-daemon`), and the picture
+  arriving in a browser is the one thing still unconfirmed, along with the control datachannel and
+  the raw-frame request. Signalling itself is verified from outside a browser: a WebSocket client
+  announcing itself as a listener gets `welcome` and `peerStatusChanged` back.
+  `Source::Test` is how to tell a session problem from a capture problem.
 - **Servo bus.** `duck-control::RobotIo` is the seam - see `JETSON.md` - and until an impl exists
   for the S288 protocol, `robotd` retries `/dev/ttyS2` and runs without a body.
 - **IMU.** Upstream reads it on the servo bus in the same transaction as the joints; the fork's

@@ -6,8 +6,10 @@ so the fork stays small enough to keep merging upstream.
 
 ## Branch model
 
-- `main` tracks `upstream/main` (pollen-robotics/microduck) and is never committed to.
-- `jetson` holds every port change. Sync: `git fetch upstream && git merge upstream/main`.
+- `main` tracks `upstream/main` (pollen-robotics/microduck) and **holds every port change**, committed
+  here directly. Sync: `git fetch upstream && git merge upstream/main`.
+- `origin` is this fork (yangbc2015/unitree_microduck). These are the two remotes, and `main` is
+  deliberately both: one branch to rebase, no long-lived `jetson` branch to drift.
 - Ground rules, all of them about keeping the diff cheap to rebase:
   - new files over edited files
   - configuration over code
@@ -49,6 +51,12 @@ Additive (no core changes):
   `python/servo_demo.py`). CRC plus the position/speed conversion factors.
 - IMU: an LSM6DSV16X reader over I2C, feeding `Sensors.imu` from the same `read()`.
 - `deploy/jetson/*.toml`: serial port, camera device, model paths, policy slots.
+- `deploy/jetson/10-argus-socket.conf`: **in use now.** A systemd drop-in for `mediad.service`, not
+  an edit to it. Upstream's unit sets `PrivateTmp=yes`, which on this board hides
+  `/tmp/argus_socket` - where `nvargus-daemon` listens - so `nvarguscamerasrc` cannot reach the
+  daemon and the session comes up with no frames. The drop-in binds that one path in and adds
+  `After=nvargus-daemon.service`. `docs/project/jetson-port.md` § "What bit on the way" has the two
+  error lines it fixes, and `lsof /dev/video0` is how you tell it is fixed.
 - `scripts/setup-jetson-*.sh`: the Jetson counterparts of `setup-npu.sh`, `setup-rkaiq.sh`,
   `setup-gstreamer.sh`, `scripts/provision-board.sh`, plus the preinstall hook.
 

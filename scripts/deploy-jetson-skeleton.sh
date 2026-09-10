@@ -48,6 +48,15 @@ for u in "${SERVICE_UNITS[@]}"; do
   fi
 done
 
+# Board delta that is not code: mediad's unit is upstream's, and on this board it needs the Argus
+# socket visible inside its private /tmp (see the file, and docs/project/jetson-port.md). A drop-in
+# rather than an edit, so mediad/systemd/mediad.service stays byte-for-byte upstream's.
+if [ -f "$REPO/deploy/jetson/10-argus-socket.conf" ]; then
+  sudo mkdir -p /etc/systemd/system/mediad.service.d
+  sudo cp -f "$REPO/deploy/jetson/10-argus-socket.conf" /etc/systemd/system/mediad.service.d/
+  echo "    mediad.service.d/10-argus-socket.conf"
+fi
+
 echo "==> 4/7 creating robot group + daemon users (sysusers)"
 sudo cp -f "$REPO/updater/systemd/sysusers.d/robot.conf" /usr/lib/sysusers.d/robot.conf
 for s in "${SYSUSERS[@]}"; do
