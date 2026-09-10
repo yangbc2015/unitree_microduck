@@ -57,6 +57,15 @@ if [ -f "$REPO/deploy/jetson/10-argus-socket.conf" ]; then
   echo "    mediad.service.d/10-argus-socket.conf"
 fi
 
+# The second board delta of the same kind: `--rotate 0` because the camera here is mounted square to
+# the world and `mediad`'s default is the Radxa's quarter turn (see the file). Same reason for a
+# drop-in - the unit stays byte-for-byte upstream's.
+if [ -f "$REPO/deploy/jetson/20-mount.conf" ]; then
+  sudo mkdir -p /etc/systemd/system/mediad.service.d
+  sudo cp -f "$REPO/deploy/jetson/20-mount.conf" /etc/systemd/system/mediad.service.d/
+  echo "    mediad.service.d/20-mount.conf"
+fi
+
 echo "==> 4/7 creating robot group + daemon users (sysusers)"
 sudo cp -f "$REPO/updater/systemd/sysusers.d/robot.conf" /usr/lib/sysusers.d/robot.conf
 for s in "${SYSUSERS[@]}"; do

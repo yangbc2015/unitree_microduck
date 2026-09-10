@@ -228,7 +228,28 @@ The evidence, in the order the page walks it:
                     -> peer {ice: candidate ... 10.65.32.235 ... } and a STUN srflx candidate
     /run/mediad/camera.json -> {"fps":30.0,"targetFps":30,"width":1280,"height":720,"dropped":0}
 
-What is still unverified is the rest of the console rather than the video: the control datachannel, the telemetry it carries, and the raw-frame request. `Source::Test` is still how a session problem is told from a capture problem - it exercises the same session with no camera involved.
+What is still unverified is the rest of the console rather than the video, and the control channel is
+now checked the same way - from the console's own drawer, in a browser at the keyboard:
+
+    datachannel: control
+    control → {"jsonrpc":"2.0","id":1,"method":"hello","params":{"api_version":27}}
+    control ← {"jsonrpc":"2.0","id":1,"result":{"api_version":16,"daemon_version":"0.10.0",...}}   item 12
+    control ← {"jsonrpc":"2.0","id":4,"error":{"code":-32601,"message":"unknown method \"robot.policies\""}}   item 12
+    control ← {"jsonrpc":"2.0","id":6,"error":{"code":-32603,"message":"Config is not answering: ..."}}   item 14
+    control ← net.connect, system.pairingPin -> "is not available over WebRTC"   the route table, working
+
+so the transport, the JSON-RPC framing and the route table are all exercised end to end; what the
+first three lines turned up were a release tree that was one version behind and a mount angle that
+was one board out (items 12 and 13, both fixed). With those in, `hello` answers 27,
+`robot.policies` answers with the policy slots, and the picture is upright. Two things on this
+session are still unexercised: `robot.state` telemetry, which needs a control loop (no servo bus
+here, so `robot.subscribe` is accepted and then silent - `robotd --fake` is how to see it without
+hardware), and `media.detections`, which needs the detector, off on this board.
+
+An on-demand snapshot is *not* part of this surface, and the earlier draft of this section said it
+was: there is no `media.frame`, and the snapshot API is the unix socket's
+(`docs/design/architecture.md`, "On-robot SDK, `robotctl` | unix socket | snapshot API"), which is a
+different transport reached by a different client.
 
 One thing about the console worth knowing before calling it broken: **the page opens its WebSocket when `connect` is clicked, not when it loads.** A reload alone leaves the page idle and the video black, and that is the page working as designed.
 
@@ -295,8 +316,10 @@ the encoder with the capture path out of the picture.
 
 ## What bit on the way
 
-Eleven failures, in the order they were hit. Each one cost more than it should have, which is the
-reason they are written down: nine of the eleven had a symptom that pointed somewhere else.
+Fourteen entries, in the order they were hit. Each one cost more than it should have, which is the
+reason they are written down: most had a symptom that pointed somewhere else. The last three were
+found by the console's own drawer rather than by a log - the first time this port was debugged from
+the client's side - and the last of them is a board limitation rather than a mistake.
 
 **1. `no webrtcsink`, then `property 'run-signalling-server' not found`.** `gst-plugins-rs` builds
 `webrtcsink` for whichever series matches the GStreamer underneath. The 0.13 series moved the
@@ -416,14 +439,74 @@ without it". `gst-inspect-1.0 nicesrc` is the check, `sudo apt-get install -y gs
 fix. From the browser this failure is invisible: the session is announced and then withdrawn, and
 nothing on the page says ICE was never available.
 
+**12. `hello` answered `api_version: 16` for a robot whose `robotd` was a fresh 0.11.0 build.** With
+the picture up and the drawer open, two of its lines disagreed with an otherwise working robot:
+
+    control → {"jsonrpc":"2.0","id":1,"method":"hello","params":{"api_version":27}}
+    control ← {"jsonrpc":"2.0","id":1,"result":{"api_version":16,"daemon_version":"0.10.0",...}}
+    control ← {"jsonrpc":"2.0","id":4,"error":{"code":-32601,"message":"unknown method \"robot.policies\""}}
+
+`hello` is the handshake the console compares its own version against, and `robot.policies` is a
+method it calls on every connect. Neither is a protocol problem, and neither is the page's: `hello`
+is answered by **`updaterd`** - `duck-ipc-proto`'s `destination()` hands `Call::Hello(_)` to
+`Updater`, because the version handshake belongs to the service that knows what is installed - so
+the page was talking to a 0.10.0 daemon while `robotd` beside it was 0.11.0. The tree
+(`/opt/robot/daemon/releases/0.11.0-jetson/bin`) had been assembled by hand, one `sudo install` per
+binary that somebody remembered, and only `mediad` had ever been rebuilt. The A/B that says so, one
+probe against two binaries:
+
+    robotd 0.10.0 (deployed)  hello -> api_version 16 | robot.policies -> unknown method
+    robotd 0.11.0 (built now) hello -> api_version 27 | robot.policies -> {enabled, mode, skills, slots}
+
+The fix is not "rebuild the one that changed" but "install the release as a release":
+`scripts/deploy-jetson-binaries.sh` builds the workspace, backs the tree up under
+`/opt/robot/daemon/backups/`, installs every binary the tree holds, restarts the enabled units, and
+prints what each socket answers. `robotctl` had been saying the same thing from the other side all
+along - "robotd speaks API v27 and this robotctl speaks v16, so they were not built together" - and
+that line is worth reading as an instruction rather than as a warning.
+
+**13. The picture arrived, and it arrived lying on its side.** `mediad` does not rotate pixels: it
+tells every consumer how far the camera is mounted off upright and they turn the picture for free.
+`--rotate` defaults to 90 - "there is one default and it is the robot's", the Radxa's - and the unit
+passes no arguments, so this board advertised a quarter turn for a camera sitting square in its
+bracket. The console said so itself, in the drawer, over a picture nobody could read:
+
+    video 1280x720, camera mounted 90° off upright
+
+The hardware fact came from the board rather than from the console: a raw frame captured with
+nothing rotating in the path (`nvarguscamerasrc ! nvvidconv ! jpegenc`) is landscape-normal - its
+long world-horizontal edges run horizontally - so a quarter turn was being applied to a correct
+frame, not applied twice in the other direction. `deploy/jetson/20-mount.conf` overrides `ExecStart`
+with `--rotate 0`. It is a flag and not a `[media]` key on purpose: the mount is a fact about the
+hardware rather than a setting, and `robotctl configure` deliberately does not offer it. The drop-in
+exists so `mediad/systemd/mediad.service` stays byte-for-byte upstream's, exactly as the Argus
+socket drop-in beside it does.
+
+**14. `system.info` fails on a board with no NetworkManager.** The second call the page makes on
+every connect answers
+
+    {"code":-32603,"message":"Config is not answering: No such file or directory (os error 2)"}
+
+`configd` drives NetworkManager and cannot start without it, so the robot's own name and serial -
+which live in the config it owns - are not available over the control channel and the console logs
+`!! system.info failed`. Not a port bug and not fixable from the daemons: either NetworkManager is
+installed on the board, or the identity panel reports the failure it is handed. `net.*` and
+`system.pairingPin` fail for one reason with it, and there the console already labels its two
+buttons "refused" - those two are the route table being consulted, not a robot that cannot answer.
+
 ## Open items
 
-- **The rest of the console.** The picture is confirmed end to end (see "The consumer"), by a browser
-  and by a WebSocket client replaying the page's own sequence. Unverified from here: the control
-  datachannel `mediad` creates per consumer, the telemetry it carries, and the raw-frame request
-  behind `media.frame`. Both are exercised by the same session the video takes, so a session that
-  shows a picture and a control channel that answers are separate questions rather than one.
-  `Source::Test` is how to tell a session problem from a capture problem.
+- **The console's sessions are verified; its live streams are not.** The picture arrives, the control
+  channel answers, and the route table refuses what it should (see "The consumer"). Still
+  unexercised on this board: `robot.state` telemetry - `robot.subscribe` is accepted and then silent,
+  because there is no servo bus and therefore no control loop, and `robotd --fake` is the way to see
+  it without hardware - and `media.detections`, which needs the detector, off here. Both ride the
+  session the video already uses, so a picture and a telemetry stream are separate questions rather
+  than one.
+- **The remote path.** Every session so far has been on the LAN. The rendezvous relay, the account
+  token and `/etc/robot/hf-token` are untouched: `mediad::turn` says so at every start ("no account
+  token, so this robot offers no relay candidates"), and that is the only thing between this board
+  and being reachable from off its network.
 - **Servo bus.** `duck-control::RobotIo` is the seam - see `JETSON.md` - and until an impl exists
   for the S288 protocol, `robotd` retries `/dev/ttyS2` and runs without a body.
 - **IMU.** Upstream reads it on the servo bus in the same transaction as the joints; the fork's

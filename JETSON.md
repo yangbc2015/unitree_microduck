@@ -57,6 +57,15 @@ Additive (no core changes):
   daemon and the session comes up with no frames. The drop-in binds that one path in and adds
   `After=nvargus-daemon.service`. `docs/project/jetson-port.md` § "What bit on the way" has the two
   error lines it fixes, and `lsof /dev/video0` is how you tell it is fixed.
+- `deploy/jetson/20-mount.conf`: **in use now.** The other board delta of the same kind: `mediad`
+  advertises how far the camera is mounted off upright and lets the client turn the picture, and its
+  default is 90 because that is the Radxa's mount. The Arducam here sits square in its bracket, so
+  without this the console rotates a correct picture a quarter turn and the video arrives sideways.
+  `--rotate 0` has no `[media]` key - the mount is hardware, not a setting - hence a drop-in.
+- `scripts/deploy-jetson-binaries.sh`: builds the workspace and installs **every** binary into the
+  release tree, backing the old one up first. Installing only the daemon that changed is what left
+  this board's `0.11.0-jetson` tree holding `0.10.0` binaries, with `hello` (answered by `updaterd`)
+  and `robot.policies` (answered by `robotd`) disagreeing in the console's own drawer.
 - `scripts/setup-jetson-*.sh`: the Jetson counterparts of `setup-npu.sh`, `setup-rkaiq.sh`,
   `setup-gstreamer.sh`, `scripts/provision-board.sh`, plus the preinstall hook.
 
