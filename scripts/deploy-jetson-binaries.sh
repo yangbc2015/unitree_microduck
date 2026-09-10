@@ -79,4 +79,32 @@ for path in ("/run/robotd.sock", "/run/updaterd.sock", "/run/configd.sock"):
     except Exception as exc:
         print(f"    {path:24s} {type(exc).__name__}: {exc}")
 PY
-echo "    camera: $(sudo cat /run/mediad/camera.json 2>/dev/null || echo '(mediad not publishing)')"
+# The camera is the line that needs a wait, twice over. mediad comes back into a pipeline that takes
+# a few seconds to build, and the capture meter's window starts when the pipeline does - so the first
+# number it publishes covers startup and reads like a fault (12.7 fps of 30 on a board that is fine).
+# Wait for a window that is at target before reporting it, and say so when it never gets there: a
+# deploy report that shows the startup transient as the capture rate sends the next person debugging
+# a healthy robot.
+sudo python3 - <<'PY'
+import json, time
+
+path = "/run/mediad/camera.json"
+deadline = time.monotonic() + 10
+latest = None
+while time.monotonic() < deadline:
+    try:
+        latest = json.load(open(path))
+    except Exception:
+        latest = None
+    if latest and latest["fps"] >= latest["targetFps"] * 0.9:
+        break
+    time.sleep(0.5)
+
+if latest is None:
+    print("    camera: nothing published in 10s - `journalctl -u mediad`")
+else:
+    warming = "" if latest["fps"] >= latest["targetFps"] * 0.9 else " - still warming up, check the journal"
+    print(f"    camera: {latest['fps']} fps of {latest['targetFps']}, {latest['width']}x{latest['height']} "
+          f"{latest['format']}, dropped={latest['dropped']}{warming}")
+PY
+
