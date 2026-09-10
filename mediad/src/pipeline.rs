@@ -215,6 +215,9 @@ pub enum Source {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Camera {
     pub device: String,
+    /// Which CSI port Argus reads, 0 being CAM0. Unused on a board whose capture is `v4l2src`,
+    /// which names a device node because rkisp exposes several; this board numbers its ports.
+    pub sensor_id: u32,
     pub exposure: u32,
     pub analogue_gain: u32,
 }
@@ -417,7 +420,7 @@ pub fn start(
             src.set_property("is-live", true);
             src
         }
-        Source::Camera(camera) => camera_source(camera, fps)?,
+        Source::Camera(camera) => camera_source(camera, width, height, fps)?,
         Source::Sim(addr) => sim_source(addr, width, height, fps)?,
     };
 
@@ -480,11 +483,30 @@ pub fn start(
 
     let tee = make("tee")?;
 
+    // **Does the encoder this board will use accept the format the tee carries?**
+    //
+    // `UYVY` stays the tee's format, for the reasons [`CAPTURE_FORMAT`] gives: it is what rkisp
+    // pushes fastest, what the detector reads luma straight out of, and what `mpph264enc` takes -
+    // converting to 4:2:0 on the RGA for nothing. A board with no hardware encoder gets `x264enc`,
+    // which has no `UYVY` sink at all, so there the two encoder branches convert.
+    //
+    // **After the tee, never before it.** Upstream measured 29.3 fps against 19.7 for a
+    // `videoconvert` in front of the tee, and the raw branch's consumers want the unconverted frame
+    // regardless. What is left is one conversion per encoder branch, and what that costs on this
+    // board is in `docs/project/jetson-port.md`.
+    let encoder_takes_capture_format = gst::ElementFactory::find("mpph264enc").is_some();
+
     // ── the video branch ────────────────────────────────────────────────────
     //
     // Its own queue, so this branch runs on its own thread. Without one, `tee` pushes to both
     // branches from a single thread and whichever is slower holds up the other.
     let video_queue = make("queue")?;
+
+    // The video branch's half of it. `webrtcsink` configures an encoder it recognises and then
+    // hands it raw frames, so for `x264enc` it converts nothing itself.
+    let video_convert = (!encoder_takes_capture_format)
+        .then(|| make("videoconvert"))
+        .transpose()?;
 
     // **Raw video in, and `webrtcsink` owns the encoder.** This used to be
     // `mpph264enc ! h264parse ! webrtcsink`, which worked and gave up two things quietly: with
@@ -568,7 +590,7 @@ pub fn start(
     // Handing `webrtcsink` the encoder would otherwise *lose* them, which would make this change a
     // regression rather than an improvement: `profile` defaults to High and `header-mode` to
     // first-frame, and both matter — see `wire_encoder_setup`.
-    wire_encoder_setup(&sink)?;
+    wire_encoder_setup(&sink, fps)?;
 
     let consumers: Consumers = Arc::new(std::sync::atomic::AtomicU32::new(0));
     let (channels_tx, channels_rx) = mpsc::channel::<Channel>(4);
@@ -649,6 +671,12 @@ pub fn start(
         ])
         .context("could not add elements to the pipeline")?;
 
+    if let Some(convert) = video_convert.as_ref() {
+        pipeline
+            .add(convert)
+            .context("could not add the video branch's converter to the pipeline")?;
+    }
+
     // On the capsfilter's src pad, which is the last point before the tee splits the stream —
     // so this counts every frame the driver delivered, with nothing lossy in between.
     meter_capture_rate(
@@ -669,8 +697,12 @@ pub fn start(
         "could not link the source to the tee. A caps failure here means the source cannot \
          produce NV12 at the requested size and rate.",
     )?;
-    gst::Element::link_many([&video_queue, &sink])
-        .context("could not link the video queue to webrtcsink")?;
+    match video_convert.as_ref() {
+        Some(convert) => gst::Element::link_many([&video_queue, convert, &sink])
+            .context("could not link the video branch to webrtcsink")?,
+        None => gst::Element::link_many([&video_queue, &sink])
+            .context("could not link the video queue to webrtcsink")?,
+    }
     gst::Element::link_many([&raw_queue, appsink.upcast_ref()])
         .context("could not link the raw branch to its appsink")?;
 
@@ -788,6 +820,16 @@ fn build_stream_branch(
         })
         .context("neither mpph264enc nor x264enc is available")?;
 
+    // The tee's `UYVY` in, whatever this encoder takes out. `mpph264enc` takes `UYVY` and converts
+    // on the RGA for nothing; `x264enc` has no `UYVY` sink at all, and without this the branch will
+    // not link - and the failure names the tee rather than the format, which is how this took a
+    // second pass to find. Five frames a second is what makes a software conversion affordable on
+    // this branch, unlike in front of the tee where upstream measured 29.3 fps against 19.7.
+    let convert = gst::ElementFactory::find("mpph264enc")
+        .is_none()
+        .then(|| make("videoconvert"))
+        .transpose()?;
+
     // `config-interval=-1` repeats SPS and PPS in front of every keyframe, which is what lets a
     // receiver that connects mid-stream decode from the next one without having been sent
     // anything it missed. Without it a reconnecting Space needs the parameter sets it never saw.
@@ -840,17 +882,37 @@ fn build_stream_branch(
             appsink.upcast_ref(),
         ])
         .context("could not add the H.264 branch to the pipeline")?;
-    gst::Element::link_many([
-        &queue,
-        &valve,
-        &rate,
-        &scale,
-        &caps,
-        &encoder,
-        &parse,
-        appsink.upcast_ref(),
-    ])
-    .context("could not link the H.264 branch")?;
+    if let Some(convert) = convert.as_ref() {
+        pipeline
+            .add(convert)
+            .context("could not add the H.264 branch's converter")?;
+    }
+
+    match convert.as_ref() {
+        Some(convert) => gst::Element::link_many([
+            &queue,
+            &valve,
+            &rate,
+            &scale,
+            &caps,
+            convert,
+            &encoder,
+            &parse,
+            appsink.upcast_ref(),
+        ])
+        .context("could not link the H.264 branch")?,
+        None => gst::Element::link_many([
+            &queue,
+            &valve,
+            &rate,
+            &scale,
+            &caps,
+            &encoder,
+            &parse,
+            appsink.upcast_ref(),
+        ])
+        .context("could not link the H.264 branch")?,
+    }
 
     tracing::info!(
         encoder = %encoder.factory().map(|f| f.name().to_string()).unwrap_or_default(),
@@ -1217,7 +1279,22 @@ fn make(name: &str) -> Result<gst::Element> {
 /// `rawvideoparse blocksize=…`, which is silently wrong the moment stride padding appears. Both
 /// belong to the *subprocess* shape: `v4l2src` attaches a `GstVideoMeta` describing the real
 /// layout, and the frame loss has a cause with a small fix — see [`raise_capture_buffers`].
-fn camera_source(camera: &Camera, fps: u32) -> Result<gst::Element> {
+fn camera_source(camera: &Camera, width: u32, height: u32, fps: u32) -> Result<gst::Element> {
+    // **The Argus arm, and it returns early.** Argus is a different capture path rather than a
+    // different device node: it takes a CSI port and pins the sensor mode from the caps it is
+    // offered, it hands back NVMM memory that has to be converted before the tee, and its ISP
+    // keeps converging exposure and white balance by itself. None of what follows applies to it,
+    // so it is dispatched here and skips all of it. [`crate::platform`] has the rest.
+    //
+    // The mode reported is the pinned one, which is the same claim upstream makes after its
+    // `media-ctl` switch: the IMX219's field of view is 62 degrees in every mode, so the
+    // intrinsics belong to the geometry rather than to the sensor mode, and `camera` says so.
+    if crate::platform::is_argus() {
+        let src = crate::platform::camera_source(camera.sensor_id, width, height, fps)?;
+        let _ = SENSOR_MODE.set(Some(crate::camera::SensorMode::PINNED));
+        return Ok(src);
+    }
+
     pin_sensor_mode(fps)?;
 
     // Exposure and gain go through `extra-controls` rather than a `v4l2-ctl` call, so they are
@@ -1649,7 +1726,7 @@ fn set_congestion_control(sink: &gst::Element, mode: robotd_params::CongestionCo
 ///
 /// Returns `false`, so `webrtcsink` still applies its own configuration on top: it owns the
 /// bitrate now, and congestion control moving it is the reason for this whole arrangement.
-fn wire_encoder_setup(sink: &gst::Element) -> Result<()> {
+fn wire_encoder_setup(sink: &gst::Element, fps: u32) -> Result<()> {
     if glib::subclass::signal::SignalId::lookup("encoder-setup", sink.type_()).is_none() {
         return Err(anyhow!(
             "webrtcsink has no encoder-setup signal; without it the encoder cannot be configured \
@@ -1679,14 +1756,58 @@ fn wire_encoder_setup(sink: &gst::Element) -> Result<()> {
             .unwrap_or_default();
         let discovering = consumer == "discovery";
 
-        // Only `mpph264enc` has these properties, and setting a property an element lacks panics —
-        // which in a signal handler aborts. So this is keyed on the factory rather than attempted
-        // hopefully.
+        // Only the encoders named here have these properties, and setting a property an element
+        // lacks panics — which in a signal handler aborts. So this is keyed on the factory rather
+        // than attempted hopefully.
         if name == "mpph264enc" {
             encoder.set_property_from_str("profile", "baseline");
             encoder.set_property_from_str("header-mode", "each-idr");
             if !discovering {
                 tracing::info!(encoder = %name, %consumer, "hardware H.264, configured for WebRTC");
+            }
+        } else if name == "x264enc" {
+            // **Software H.264, because this board has no encoder at all.** The Orin Nano's NVENC
+            // block does not exist — this JetPack's `nvvideo4linux2` plugin registers
+            // `nvv4l2decoder` and nothing else — so `webrtcsink` reaches the bottom of its rank
+            // order and lands here. It knows this encoder, so the bitrate is its business
+            // (congestion control sets it as the link is learned); what is left is latency and the
+            // keyframe interval.
+            //
+            // `ultrafast` because the six cores are shared with `robotd`'s 50 Hz loop, and this is
+            // a robot driven by a gamepad: `zerolatency` turns off B-frames, lookahead and the
+            // frame-threading delay that would otherwise add a frame or two. Measured at 720p30,
+            // capture, conversion and encode included: 0.65 of a core for `x264enc` alone, against
+            // 0.076 for upstream's `mpph264enc` on the VPU.
+            //
+            // **Checked before set, and none of upstream's `mpph264enc` spellings.** This arm
+            // shipped for one run with `profile` in it. `x264enc` has no such property — the
+            // `profile` in its caps is a *caps field*, not an element property — and
+            // `set_property_from_str` on a name the element does not have panics inside a GObject
+            // call, which in a signal handler aborts the process rather than unwinding. `profile`
+            // is also the one of upstream's three that cannot be replaced: a lower H.264 profile is
+            // chosen through caps, not on this encoder, and `video-caps` above already restricts
+            // the offer to H.264.
+            let set = |property: &str, value: &str| {
+                if encoder.has_property(property) {
+                    encoder.set_property_from_str(property, value);
+                } else {
+                    tracing::warn!(property, "x264enc has no such property; leaving it alone");
+                }
+            };
+            set("speed-preset", "ultrafast");
+            set("tune", "zerolatency");
+            // A keyframe a second, so a viewer that joins late or loses one is broken for a second
+            // rather than for x264's default 250 frames. `guint`, not the `gint` this was written
+            // with first: `set_property` with the wrong type panics in the same way a missing
+            // property does.
+            if encoder.has_property("key-int-max") {
+                encoder.set_property("key-int-max", fps.max(1));
+            }
+            if !discovering {
+                tracing::info!(
+                    encoder = %name, %consumer, fps,
+                    "software H.264, configured for WebRTC"
+                );
             }
         } else if !discovering {
             // Only meaningful for a real consumer. During discovery this fires once per codec —

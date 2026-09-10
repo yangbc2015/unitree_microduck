@@ -33,6 +33,34 @@ The policies it runs are trained next door, in
 **[microduck_rl](https://github.com/pollen-robotics/microduck_rl)** — MuJoCo and PPO, the sim2real
 recipe, and the export to ONNX that this repo loads.
 
+## This fork: a Jetson Orin Nano
+
+This is a fork of [pollen-robotics/microduck](https://github.com/pollen-robotics/microduck) that runs
+the same daemons on a **Jetson Orin Nano Super DevKit** instead of the Radxa Zero 3W, and drives
+**Unitree S288** servos instead of Dynamixel XL330s. The two boards are both aarch64 Linux and share
+nothing else that matters: the capture path, the video encoder, the servo bus and the IMU all differ.
+
+| | upstream (Radxa Zero 3W) | this fork (Jetson Orin Nano) | state |
+|---|---|---|---|
+| build | cross-compiled, glibc pinned | native aarch64, whole workspace clean | done |
+| servos | 15x Dynamixel XL330, Protocol 2.0, `/dev/ttyS2` | 15x Unitree S288, 6 Mbps custom protocol | not ported |
+| IMU | `imu_to_dxl` board on the servo bus | LSM6DSV16X over I2C | not ported |
+| capture | rkisp, `v4l2src` on `/dev/video0` | Argus, `nvarguscamerasrc` on a CSI port | ported |
+| exposure | `rkaiq` 3A, plus a software loop | the ISP, which never stops converging | ported |
+| H.264 | `mpph264enc` on the Rockchip VPU | no encoder at all, so `x264enc` | ported |
+| WebRTC | `webrtcsink` from `microduck-gst-plugins`, patched | `webrtcsink` from `gst-plugins-rs`, stock | build step |
+| detector | RKNN on the NPU | none yet; unported upstream too | open |
+| audio | AIC3104 on I2C3 | nothing chosen | open |
+
+**The build is not the port and the port is not the build.** Everything compiles on the board
+because the vendor-specific pieces were already reached at runtime upstream - `librknnrt.so` and the
+ONNX Runtime are `dlopen`ed, the codec plugins are looked up as GStreamer elements - so a board with
+none of them still builds. What then has to be ported, and what it costs, is in
+[`docs/project/jetson-port.md`](docs/project/jetson-port.md): what the camera actually delivers, why
+there is no `nvv4l2h264enc` to find, and the measured price of encoding in software (about 0.65 of a
+core at 720p30, against upstream's 0.076 on the VPU). [`JETSON.md`](JETSON.md) has the branch rules
+for keeping the fork mergeable with upstream.
+
 ## It does things
 
 <table>

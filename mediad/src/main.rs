@@ -90,6 +90,14 @@ struct Args {
     #[arg(long, default_value = "/dev/video0")]
     camera_device: String,
 
+    /// Which CSI port the head camera is on: 0 is CAM0.
+    ///
+    /// Read only on a board whose capture path is Argus, where the ports are numbered by the
+    /// device tree instead of being exposed as device nodes — `--camera-device` is unused there.
+    /// `mediad::platform` has the rest.
+    #[arg(long, default_value_t = 0)]
+    csi_port: u32,
+
     /// Sensor exposure in lines (~19 µs each) and analogue gain, where 256 is 1x.
     ///
     /// The starting values only: with the driver's boot values the picture is black rather than
@@ -361,6 +369,7 @@ fn main() -> ExitCode {
         } else if media.camera {
             mediad::pipeline::Source::Camera(mediad::pipeline::Camera {
                 device: args.camera_device.clone(),
+                sensor_id: args.csi_port,
                 exposure: args.exposure,
                 analogue_gain: args.analogue_gain,
             })
@@ -411,6 +420,18 @@ fn main() -> ExitCode {
         // `_exposure` is the handle that stops the thread; it lives as long as this scope, which is
         // as long as the daemon.
         let _exposure = match (&source, args.no_auto_exposure) {
+            // **The ISP meters this board's camera, and keeps metering.** `crate::exposure` exists
+            // because rkaiq converges once and then stops responding; Argus holds exposure and
+            // white balance for as long as the stream lives. Starting the loop here would put two
+            // controllers on one sensor, so it is skipped rather than tuned. `mediad::platform`
+            // has the rest.
+            (mediad::pipeline::Source::Camera(_), false) if mediad::platform::owns_exposure() => {
+                tracing::info!(
+                    "--exposure and --analogue-gain are the rkisp V4L2 controls and mean nothing \
+                     on this board; the ISP owns exposure and white balance"
+                );
+                None
+            }
             (mediad::pipeline::Source::Camera(camera), false) => Some(mediad::exposure::spawn(
                 camera.device.clone(),
                 frames.clone(),

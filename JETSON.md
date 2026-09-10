@@ -17,16 +17,9 @@ so the fork stays small enough to keep merging upstream.
 
 ## Where the port stands
 
-| area | state on the Jetson |
-|---|---|
-| build | clean. `cargo check --workspace --all-targets` passes; 13 release binaries, all aarch64 ELF |
-| systemd / updater skeleton | deployed, `robotd` + `updaterd` active |
-| servo bus | not connected. `robotd` retries `/dev/ttyS2` forever (the Radxa UART) |
-| IMU | not connected. Upstream reads an `imu_to_dxl` board on the servo bus |
-| camera / video | not ported. Pipeline is Rockchip MPP (`mpph264enc`) + rkisp + an rkaiq 3A loop |
-| detector | upstream is not wired to the detector either (`docs/project/npu-bringup.md`: nothing can get a frame yet) |
-| audio | not ported. Upstream is an AIC3104 on the Radxa I2C3 header |
-| ToF | unverified. Same VL53L5CX/L8CX class of 8x8 sensor over I2C, so mostly a device-node question |
+The status table, the measurements behind each row, and the open items live in
+[`docs/project/jetson-port.md`](docs/project/jetson-port.md). In one line: the whole workspace
+builds natively, the camera path is ported, and the servo bus, IMU, audio and depth are not.
 
 ## The seam that already exists
 
@@ -60,12 +53,12 @@ Additive (no core changes):
   `setup-gstreamer.sh`, `scripts/provision-board.sh`, plus the preinstall hook.
 
 Core patches, kept as small as possible:
-- `robotd/src/main.rs`: the `BusIo` alias and `open_bus()`.
-- `mediad/src/pipeline.rs` and `mediad/src/main.rs`: capture and encoder element names, which are
-  hardcoded to `rkisp` and `mpph264enc`. `cfg(target_os = "linux")` cannot separate the two boards,
-  so this wants a feature flag or runtime configuration rather than a cfg.
-- `mediad/src/exposure.rs`: the rkaiq 3A loop. Jetson's Argus owns exposure and white balance, so
-  most of this file has no counterpart rather than a replacement.
+- `robotd/src/main.rs`: the `BusIo` alias and `open_bus()`. Not started.
+- `mediad/`: **done, and the shape to keep.** `platform.rs` (new) holds the Jetson capture path -
+  Argus, the two-element bin, and why nothing meters the picture - while `pipeline.rs` and
+  `main.rs` grew one arm each to dispatch to it, and `wire_encoder_setup` gained the `x264enc` arm.
+  The wire format stayed `UYVY` and the tee, the detector tap and the WebRTC branch are untouched.
+  `docs/project/jetson-port.md` has the measurements.
 
 ## Hardware
 

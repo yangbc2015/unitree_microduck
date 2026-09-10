@@ -40,6 +40,11 @@ pub mod web;
 #[cfg(target_os = "linux")]
 pub mod pipeline;
 
+/// What the board is, where the two boards this fork runs on differ in the capture path. Linux
+/// only for [`pipeline`]'s reason.
+#[cfg(target_os = "linux")]
+pub mod platform;
+
 /// Auto-exposure, in software, because the board's 3A engine does not do it. Linux only for
 /// [`pipeline`]'s reason — it meters the frames the pipeline taps off the tee.
 #[cfg(target_os = "linux")]
