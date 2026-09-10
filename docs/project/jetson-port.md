@@ -112,6 +112,20 @@ has no NVENC block, so there is no `nvv4l2h264enc`, no `nvv4l2vp8enc` and no `nv
 back to. `webrtcsink` therefore reaches `x264enc`, which it already knows how to drive - so the
 patch upstream carries for `mpph264enc` is not needed here.
 
+**A second plugin, `nvenc`, is installed and looks like it contradicts that - it does not.** It loads
+and tries to register its encoders, fails, and logs the failure at startup:
+
+    ERROR nvenc gstnvenc.c:685:gst_nv_enc_register: NvEncOpenEncodeSessionEx failed: codec h265, device 0, error code 2
+    WARN  nvh264encoder:gst_nv_h264_encoder_register_cuda:<cudacontext0> Failed to open session
+    WARN  nvh265encoder:gst_nv_h265_encoder_register_cuda:<cudacontext0> Failed to open session
+
+What matters is the consequence, not the noise: an element that fails to register **is not there at
+all**, so `gst-inspect-1.0 nvh264enc` answers "no such element" and `webrtcsink` cannot pick it.
+Check that rather than the log - the logs read like a fault and are not one:
+
+    gst-inspect-1.0 nvh264enc     # no such element: nothing to fall back to
+    gst-inspect-1.0 x264enc | grep Rank    # primary (256), the best H.264 encoder on the board
+
 Measured, 720p30, capture through `nvvidconv`, `x264enc speed-preset=ultrafast tune=zerolatency`,
 300 frames:
 
