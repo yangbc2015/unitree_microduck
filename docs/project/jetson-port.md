@@ -240,11 +240,24 @@ now checked the same way - from the console's own drawer, in a browser at the ke
 
 so the transport, the JSON-RPC framing and the route table are all exercised end to end; what the
 first three lines turned up were a release tree that was one version behind and a mount angle that
-was one board out (items 12 and 13, both fixed). With those in, `hello` answers 27,
-`robot.policies` answers with the policy slots, and the picture is upright. Two things on this
-session are still unexercised: `robot.state` telemetry, which needs a control loop (no servo bus
-here, so `robot.subscribe` is accepted and then silent - `robotd --fake` is how to see it without
-hardware), and `media.detections`, which needs the detector, off on this board.
+was one board out (items 12 and 13, both fixed). The same drawer, after those two fixes, in the
+browser that reported them:
+
+    datachannel: control
+    control → {"jsonrpc":"2.0","id":1,"method":"hello","params":{"api_version":27}}
+    control ← {"jsonrpc":"2.0","id":1,"result":{"api_version":27,"daemon_version":"0.11.0","revision":null}}
+    video 1280x720, camera mounted 0° off upright
+    3 skill(s): roulade, kick_left, kick_right
+    control ← {"jsonrpc":"2.0","id":6,"error":{"code":-32603,"message":"Config is not answering: ..."}}
+
+The version the page compares itself against now agrees with it, the mount line reads 0 and the
+picture stands up, `robot.policies` comes back as the three skills the page lists, and the one line
+still red is item 14 - a board with no NetworkManager, and the console reporting it honestly rather
+than pretending.
+
+Two things on this session are still unexercised: `robot.state` telemetry, which needs a control loop
+(no servo bus here, so `robot.subscribe` is accepted and then silent - `robotd --fake` is how to see
+it without hardware), and `media.detections`, which needs the detector, off on this board.
 
 An on-demand snapshot is *not* part of this surface, and the earlier draft of this section said it
 was: there is no `media.frame`, and the snapshot API is the unix socket's
