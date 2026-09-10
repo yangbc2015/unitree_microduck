@@ -216,19 +216,21 @@ measuring properly: it is with **no consumer connected**, and the same run as th
 no consumer) costs **0.02 of a core**, so the two are not measuring the same thing yet. What the
 steady cost is with a browser actually receiving is still open.
 
-### What is still missing
+### The consumer
 
-A consumer. Everything up to and including the signalling server is verified on this board:
+A browser has now connected to this board and **shown the picture**: signalling negotiation, ICE, DTLS and the H.264 stream, end to end, with the console served from `:8080` and the session arriving from `webrtcbin` on `:8443`. Two failures were in the way and both are in "What bit on the way" below - item 10 (the pipeline never started, so the signalling server had no producer at all) and item 11 (`webrtcbin` had no ICE, so every session ended the moment it began). The camera path underneath was working for both; what neither of them had was a session that could carry it.
 
-    INFO mediad::platform: head camera through Argus; the ISP owns exposure and white balance sensor_id=0 width=1280 height=720 fps=30
-    INFO mediad::pipeline: signalling server listening host="0.0.0.0" port=8443 source=Camera(Camera { device: "/dev/video0", sensor_id: 0, ... })
-    INFO mediad: camera geometry fx=1061.8060 fy=1062.1937 cx=596.7777 cy=474.5235 calibrated=true
+The evidence, in the order the page walks it:
 
-with the console answering 200 on `:8080`, no panic in either run, and the daemon idle at 0.02 of a
-core and 174 MB resident while nobody is connected. What has not happened is a browser connecting:
-the signalling server's negotiation, the control datachannel and the raw-frame request are all
-unverified end to end, and `Source::Test` is how to tell a failure there from a failure in the
-capture path - it exercises the same session with no camera involved.
+    list            -> [{"id": "2669f8ae-...", "meta": {"api_version": "27", "release": "0.11.0-jetson"}}]
+    startSession    -> sessionStarted
+                    -> peer {sdp: {type: offer, ...H264/90000, sendonly, BUNDLE video0+application1}}
+                    -> peer {ice: candidate ... 10.65.32.235 ... } and a STUN srflx candidate
+    /run/mediad/camera.json -> {"fps":30.0,"targetFps":30,"width":1280,"height":720,"dropped":0}
+
+What is still unverified is the rest of the console rather than the video: the control datachannel, the telemetry it carries, and the raw-frame request. `Source::Test` is still how a session problem is told from a capture problem - it exercises the same session with no camera involved.
+
+One thing about the console worth knowing before calling it broken: **the page opens its WebSocket when `connect` is clicked, not when it loads.** A reload alone leaves the page idle and the video black, and that is the page working as designed.
 
 ## What the port changed
 
@@ -238,7 +240,7 @@ and the existing files got an arm each rather than a rewrite.
 | file | change |
 |---|---|
 | `mediad/src/platform.rs` | **new.** `is_argus()`, `owns_exposure()`, and `camera_source()`: a bin of `nvarguscamerasrc` -> capsfilter (`NVMM/NV12`, the configured geometry and rate) -> `nvvidconv` -> capsfilter (system memory, `UYVY`), exposed with a ghost pad |
-| `mediad/src/pipeline.rs` | `camera_source` dispatches to the bin and reports `SensorMode::PINNED`; `Camera` gains `sensor_id`; `wire_encoder_setup` gains the `x264enc` arm; the two encoder branches gain a `videoconvert`, conditional on there being no `mpph264enc` |
+| `mediad/src/pipeline.rs` | `camera_source` dispatches to the bin and reports `SensorMode::PINNED`; `Camera` gains `sensor_id`; `wire_encoder_setup` gains the `x264enc` arm; the two encoder branches gain a `videoconvert`, conditional on there being no `mpph264enc`; `build_stream_branch`'s `AppSink` gains `async(false)` - see item 10, a shut `valve` upstream of an async sink stops the pipeline from ever starting |
 | `mediad/src/main.rs` | `--csi-port`; the software exposure loop is skipped where the ISP owns metering |
 | `mediad/src/lib.rs` | declares the module |
 
@@ -293,8 +295,8 @@ the encoder with the capture path out of the picture.
 
 ## What bit on the way
 
-Nine failures, in the order they were hit. Each one cost more than it should have, which is the
-reason they are written down: seven of the nine had a symptom that pointed somewhere else.
+Eleven failures, in the order they were hit. Each one cost more than it should have, which is the
+reason they are written down: nine of the eleven had a symptom that pointed somewhere else.
 
 **1. `no webrtcsink`, then `property 'run-signalling-server' not found`.** `gst-plugins-rs` builds
 `webrtcsink` for whichever series matches the GStreamer underneath. The 0.13 series moved the
@@ -357,14 +359,70 @@ local checks and for `cargo test`; `curl --noproxy '*'` for the console. `cargo`
 need the opposite: `https_proxy=... CARGO_NET_GIT_FETCH_WITH_CLI=true`, because `libgit2` ignores
 `http_proxy` and otherwise the build sits at 0% CPU forever.
 
+**10. The console said "no producers", and the pipeline had never started.** The page loaded, opened
+its socket, and stopped on the line that names this exact possibility:
+
+    !! no producers. mediad registers as one when its pipeline reaches PLAYING -
+       check its journal for a pipeline that would not start.
+
+The journal said the opposite: the camera bin was built, the signalling server was listening on
+`8443`, `curl` on `:8080` answered, and the daemon sat at 0.0 of a core with no error anywhere. Two
+facts settled it, and neither is a log line: `/run/mediad/camera.json` - the file `meter_capture_rate`
+rewrites once a second while frames arrive - **did not exist**, and the pipeline reported
+
+    pipeline state: ready -> paused        <- and no paused -> playing, ever
+    tee=8  sink=1                          <- the preroll buffer, then silence
+
+So the source had delivered its preroll buffer and stopped. `webrtcsink`'s codec discovery never saw
+a second one, which matters because its signaller only starts once discovery is done
+(`should_start_signaller`): no signaller, no producer registration, no producer in `list`, no
+session, no video. Every consequence of that looked like a client-side problem, which is why the
+console's own message is honest and misleading at the same time.
+
+The cause is the valved H.264 branch, and it is general rather than a `mediad` bug: **a `valve` with
+`drop=true` starves the sink downstream of it, and a sink that goes asynchronously to PAUSED
+(`async=true`, the default for both `appsink` and `fakesink`) waits for a buffer that will never
+arrive - so the pipeline never leaves PREROLLING.** GStreamer says so in one line, with no `mediad`
+in sight:
+
+    $ gst-launch-1.0 -e videotestsrc num-buffers=60 ! tee name=t \
+        t. ! queue ! fakesink sync=false t. ! queue ! valve drop=true ! fakesink sync=false
+    Setting pipeline to PAUSED ...
+    Pipeline is PREROLLING ...              <- and there it stays
+
+`drop=false`, or `async=false` on that branch's sink, and it prerolls and plays. This branch is shut
+on purpose ("shut until something asks"), so it must not hold up preroll: `build_stream_branch` now
+sets `async(false)` on its `AppSink`, beside the `drop(false)` it already had.
+
+How it was found, because the first attempts were wrong: `gst-launch` cannot express `meta` or
+connect `encoder-setup`, so the whole pipeline was rebuilt through the GObject bindings with every
+property `mediad` sets, with buffer counters on the tee and on `webrtcsink`'s sink pad, and then
+**bisected by dropping one ingredient at a time**. Only the valved branch turned "stuck in PAUSED"
+into "60 buffers every two seconds". `gst-launch` remains the right tool for the reduced case, and
+the counters are what make a stall visible instead of inferred.
+
+**11. `libnice elements are not available`, and the session died in the millisecond it started.**
+With the pipeline playing and the producer in `list`, the console walked to `sessionStarted` and then
+got `endSession` from the robot - no SDP offer was ever sent. The producer's side names it:
+
+    WARN gst: error: libnice elements are not available cat=webrtcbin
+    ERROR gst: Failed to request pad from webrtcbin cat=webrtcsink
+    ERROR mediad::pipeline: pipeline error ... Failed to request pad from webrtcbin
+
+`webrtcbin` needs the `nice` plugin for ICE. This board had `libnice10` (the library) and not
+`gstreamer1.0-nice` (the plugin that provides `nicesrc`/`nicesink`), which is half of what
+`scripts/setup-gstreamer.sh` installs - and that script says why: "ICE. webrtcbin negotiates nothing
+without it". `gst-inspect-1.0 nicesrc` is the check, `sudo apt-get install -y gstreamer1.0-nice` the
+fix. From the browser this failure is invisible: the session is announced and then withdrawn, and
+nothing on the page says ICE was never available.
+
 ## Open items
 
-- **An end-to-end session, and one picture.** A browser has now been connected to this board and got
-  no video - which turned out to be the Argus socket in item 6 above, not the session. After the
-  drop-in the capture holds the camera (`lsof /dev/video0` answers `nvargus-daemon`), and the picture
-  arriving in a browser is the one thing still unconfirmed, along with the control datachannel and
-  the raw-frame request. Signalling itself is verified from outside a browser: a WebSocket client
-  announcing itself as a listener gets `welcome` and `peerStatusChanged` back.
+- **The rest of the console.** The picture is confirmed end to end (see "The consumer"), by a browser
+  and by a WebSocket client replaying the page's own sequence. Unverified from here: the control
+  datachannel `mediad` creates per consumer, the telemetry it carries, and the raw-frame request
+  behind `media.frame`. Both are exercised by the same session the video takes, so a session that
+  shows a picture and a control channel that answers are separate questions rather than one.
   `Source::Test` is how to tell a session problem from a capture problem.
 - **Servo bus.** `duck-control::RobotIo` is the seam - see `JETSON.md` - and until an impl exists
   for the S288 protocol, `robotd` retries `/dev/ttyS2` and runs without a body.

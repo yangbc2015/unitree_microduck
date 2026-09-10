@@ -66,7 +66,16 @@ Core patches, kept as small as possible:
   Argus, the two-element bin, and why nothing meters the picture - while `pipeline.rs` and
   `main.rs` grew one arm each to dispatch to it, and `wire_encoder_setup` gained the `x264enc` arm.
   The wire format stayed `UYVY` and the tee, the detector tap and the WebRTC branch are untouched.
-  `docs/project/jetson-port.md` has the measurements.
+  `pipeline.rs` also carries one fix nothing on this board caused: the valved H.264 branch's
+  `AppSink` sets `async(false)`, because a shut `valve` starves its sink, an async sink waits for a
+  buffer, and the whole pipeline then never leaves PREROLLING - which is what made the signalling
+  server report no producer at all. `docs/project/jetson-port.md` has the measurements, and items 10
+  and 11 have the two failures that stood between a working camera and a picture in a browser.
+
+Environment, which is part of the port rather than of the code: `scripts/setup-gstreamer.sh` lists
+`gstreamer1.0-nice`, and a board that has only `libnice10` gets a `webrtcbin` with no ICE - every
+session ends the instant it starts, and the browser sees nothing. `gst-inspect-1.0 nicesrc` is the
+check.
 
 ## Hardware
 

@@ -850,6 +850,14 @@ fn build_stream_branch(
         .sync(false)
         .max_buffers(ENCODED_DEPTH as u32)
         .drop(false)
+        // **`async=false`, or this branch stops the whole pipeline.** A sink that goes
+        // asynchronously to PAUSED waits for a buffer, and a shut `valve` never delivers one, so
+        // the pipeline sits in PREROLLING forever: the camera source never starts streaming,
+        // `webrtcsink` never finishes codec discovery, its signaller never runs, and the
+        // signalling server ends up with no producer at all - the console then reports "no
+        // producers" and shows no video. `drop=false` above is about keeping access units, not
+        // about preroll.
+        .async_(false)
         .build();
 
     {
