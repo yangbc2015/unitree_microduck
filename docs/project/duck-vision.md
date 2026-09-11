@@ -120,10 +120,13 @@ request allocates** (measured 2026-09-11: a staircase of roughly 16-60 MiB per r
 stretches, then jumps - never released for the life of the process; upgrading llama.cpp did not
 change it). With the loop on all day that drift reaches the unit's `MemoryMax=6G` and the kernel
 kills the model, which on this board means the console's model too. So the rig runs a user timer,
-`llama-anon-guard.timer`, every two minutes: when llama-server's cgroup `anon` crosses 2 GiB it
-restarts the server - about six seconds, the camera never blinks. `DRY_RUN=1` says what it would do
-without doing it; `THRESH_BYTES` and `MIN_GAP_SECONDS` bound it. A fresh server sits at ~0.27 GiB, so
-the ceiling is ~8x the baseline and still leaves >2 GiB before the cap.
+`llama-anon-guard.timer`, every minute: when llama-server's cgroup `anon` crosses 1.25 GiB, or the
+board's `MemAvailable` drops under 1 GiB, it restarts the server - about six seconds, the camera never
+blinks. Two triggers because either alone can be wrong: the unit's own ceiling catches the drift, and
+the system floor catches a loaded board that is still inside its cap. At most one restart per four
+minutes (`MIN_GAP_SECONDS`), and `DRY_RUN=1` reports what it would do instead of doing it. A fresh
+server sits at ~0.27 GiB, so the ceiling is ~5x the baseline and the restart happens with >1 GiB of
+system memory still free.
 
 That guard is a fact about *this* board, where the model and the console share one 8 GB pool. Point
 `LLAMA_URL` at a machine that is not also running the console and there is nothing to restart.
