@@ -1,13 +1,14 @@
 # S288 servo port — implementation plan
 
-> **Status, 2026-09-11.** Phase 0 (facts), 1 (`bus_s288.rs`), 3 (the `robotd` alias) and 4
-> (the constants) are done, and so is phase 6 except where it depends on a measurement. Phase 2
-> (the I2C IMU) has not been started. Phase 5 is split: the values that move with the rail have
-> moved, but every gain and the actuator range are now *known*-unverified rather than assumed
-> good, and they need a bench sweep. Nothing here has run against real hardware — the whole
-> implementation has only ever seen a fake transport, and the per-unit zero offsets and signs
-> every joint needs have not been measured on the one servo that exists. § Validation below is
-> still the honest to-do list. `JETSON.md` has the deltas; the git log has the arguments.
+> **Status, 2026-09-11.** Phase 0 (facts), 1 (`bus_s288.rs`), 3 (the `robotd` alias), 4 (the
+> constants) and 6 (metadata and docs) are done. Phase 5 is done on the software side — the
+> rail-dependent values moved, the clamp is per joint — but every one of those numbers is
+> *known*-unverified rather than tuned, and the travel limits in particular are the training
+> scene's rather than a measurement. Phase 2 (the I2C IMU) has not been started. Nothing here
+> has run against real hardware: the whole implementation has only ever seen a fake transport,
+> and the per-unit zero offsets and signs every joint needs have not been measured on the one
+> servo that exists. § Validation below is the honest to-do list. `JETSON.md` has the deltas;
+> the git log has the arguments.
 
 Replacing the 15 Dynamixel XL330s with Unitree S288s. This is the servo row of the
 Jetson-port status table (`docs/project/jetson-port.md`), planned in `JETSON.md` § "The seam
@@ -143,8 +144,14 @@ header updated to say where they were measured (that provenance is the file's wh
 
 ## Phase 5 — gains, limits, parameters
 
-- `safety.rs` `ACTUATOR_MIN/MAX` (line 47): the ±π is the XL330's one-turn range. Set from
-  the S288's actual travel, keeping the honest comment about what this limit is not.
+- `safety.rs` `ACTUATOR_MIN/MAX`: **done on the software side, not on the measurement side.**
+  That clamp used to be ±π for every joint; it is now `model::JOINT_RANGE`, the MJCF's own
+  `[lo, hi]` per joint. The ±π pair stays as the outer bound those ranges are checked against —
+  a test, so a joint needing more travel than the servo has fails with its name on it rather than
+  at 50 Hz on a bench. What is still open: **none of it has been measured**, and an S288 has no
+  firmware travel limit at all, so nothing between a policy and a mechanical stop knows where
+  that stop is. Run § Validation's hand-push procedure; if a stop comes back *narrower* than a
+  range, the mechanism or the training scene is what to fix, not the constant.
 - **Gain semantics.** `policy.gain = 200`, `gain_limp = 50`, `limp_fall_pose_gain = 160`,
   `standing_gain_ratio = 0.8` are XL330 register values. On the S288 the whole set needs
   re-tuning on hardware: limp gain low enough to yield to the floor, running gain stiff

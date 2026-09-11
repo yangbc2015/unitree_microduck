@@ -104,6 +104,19 @@ Additive (no core changes):
   The new pair is an envelope, not a measurement, and `model.rs` says so; the method that
   produced the old pair (run a duck flat, watch where it struggles) is what should replace it.
   `FakeIo`'s fake pack moved with the span (7.4 -> 11.25 V) so `--fake` is not a flat robot.
+- `duck-control/src/model.rs` + `safety.rs`: **per-joint travel limits.** `ACTUATOR_MIN/MAX` was
+  ±π for every joint — one turn of an XL330, which is the *actuator's* reach and not a joint's
+  travel. `model::JOINT_RANGE` carries the MJCF's own `[lo, hi]` per joint, and `safety::apply`
+  clamps against that, so a knee that stops at ±90° is no longer allowed the ±170° that
+  `head_yaw` needs. `ACTUATOR_MIN/MAX` stays as the outer bound those ranges are checked against,
+  so a joint needing more travel than the servo has fails in CI with its name on it.
+  The table is a transcription of `kinematics/assets/alpha/robot_walk.xml`, and a test compares
+  the two by joint *name* — `kinematics` is a **dev**-dependency of `duck-control` for that test
+  alone, because the crate that drives motors should not link forward kinematics to know where a
+  joint stops.
+  What has *not* happened is the measurement. These are the training scene's limits; an S288 has
+  no firmware travel limit at all, so nothing between a policy and a mechanical stop knows where
+  that stop is. § Validation in `docs/project/s288-servo-port.md` is the bench work.
 - `deploy/robotd.toml`: serial port, camera device, model paths, policy slots. Installed to
   `/etc/robot/robotd.toml` by `scripts/deploy-jetson-skeleton.sh` and only when the board has none -
   the file on a running robot is the robot's, not the tree's.
