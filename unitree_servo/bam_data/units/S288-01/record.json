@@ -2,7 +2,7 @@
   "schema": "s288-unit-record/1",
   "label": "S288-01",
   "motor_id": 0,
-  "when": "2026-09-11T20:21:20",
+  "when": "2026-09-11T20:26:33",
   "how_identified": "operator label. The protocol exposes no serial number, so this identity is only as good as the sticker someone put on the case.",
   "context": {
     "supply_v": 12.0,
@@ -47,12 +47,12 @@
           "target_rad": 0.0
         }
       ],
-      "raw_log": "/home/jetson/Desktop/microduck/unitree_servo/bam_data/M1M7_encoder_id0_20260911_201657.csv",
+      "raw_log": "unitree_servo/bam_data/units/S288-01/raw/M1M7_encoder_id0_20260911_201657.csv.gz",
       "supply_v": 12.5
     },
     "friction_sweep": {
       "case_c": 59.55555555555556,
-      "curve_csv": "/home/jetson/Desktop/microduck/unitree_servo/bam_data/M6a_friction_curve_id0.csv",
+      "curve_csv": "unitree_servo/bam_data/M6a_friction_curve_id0.csv",
       "f_out_nm": [
         0.03274542430715012,
         0.02031250498815233,
@@ -79,7 +79,7 @@
       "kd": 2.0,
       "kind": "friction_sweep",
       "n_records": 36,
-      "raw_log": "/home/jetson/Desktop/microduck/unitree_servo/bam_data/M6a_friction_sweep_id0_20260911_201700.csv",
+      "raw_log": "unitree_servo/bam_data/units/S288-01/raw/M6a_friction_sweep_id0_20260911_201700.csv.gz",
       "supply_v": 12.25,
       "v_cmd": [
         0.02,
@@ -113,7 +113,7 @@
         "+": 0.04,
         "-": 0.04
       },
-      "raw_log": "/home/jetson/Desktop/microduck/unitree_servo/bam_data/M4_breakaway_id0_20260911_201730.csv",
+      "raw_log": "unitree_servo/bam_data/units/S288-01/raw/M4_breakaway_id0_20260911_201730.csv.gz",
       "step": 0.005,
       "supply_v": 12.0,
       "tmax": 0.06
@@ -124,7 +124,7 @@
       "Fv": 0.013890710635451923,
       "alpha": 0.5000000000000001,
       "corr_Fc_Fs": -0.8792427571220963,
-      "curve_csv": "/home/jetson/Desktop/microduck/unitree_servo/bam_data/units/S288-01/M6a_friction_curve.csv",
+      "curve_csv": "unitree_servo/bam_data/units/S288-01/M6a_friction_curve.csv",
       "err": {
         "Fc": 0.00398079577228337,
         "Fs": 0.011851730422977198,
@@ -132,10 +132,10 @@
         "alpha": 0.5684367784563786,
         "vs": 0.026213258307075698
       },
-      "json": "/home/jetson/Desktop/microduck/unitree_servo/bam_data/units/S288-01/s288_bam_friction_S288-01.json",
+      "json": "unitree_servo/bam_data/units/S288-01/s288_bam_friction_S288-01.json",
       "kind": "friction_fit",
-      "markdown": "/home/jetson/Desktop/microduck/unitree_servo/bam_data/units/S288-01/S288_BAM_汇总表_S288-01.md",
-      "png": "/home/jetson/Desktop/microduck/unitree_servo/bam_data/units/S288-01/M6a_friction_fit_S288-01.png",
+      "markdown": "unitree_servo/bam_data/units/S288-01/S288_BAM_汇总表_S288-01.md",
+      "png": "unitree_servo/bam_data/units/S288-01/M6a_friction_fit_S288-01.png",
       "rms_residual_nm": 0.0011320145089896553,
       "robust": {
         "dip": 0.019610688122501108,
@@ -157,7 +157,7 @@
       "merr": 0,
       "n_samples": 1001,
       "n_transitions": 80,
-      "raw_log": "/home/jetson/Desktop/microduck/unitree_servo/bam_data/M2_delay_id0_20260911_201758.csv",
+      "raw_log": "unitree_servo/bam_data/units/S288-01/raw/M2_delay_id0_20260911_201758.csv.gz",
       "rise_1090_ms": 1.1880000000000004,
       "rms_counts": 2.473368612996711,
       "supply_v": 12.5,
@@ -310,7 +310,7 @@
           -0.0059185160741210135
         ]
       ],
-      "raw_log": "/home/jetson/Desktop/microduck/unitree_servo/bam_data/M7_compliance_id0_20260911_201801.csv",
+      "raw_log": "unitree_servo/bam_data/units/S288-01/raw/M7_compliance_id0_20260911_201801.csv.gz",
       "rotor_lsb_out_rad": 6.649731187673233e-07,
       "step": 0.004,
       "stiffness_lower_bound_nm_rad": null,
@@ -341,30 +341,30 @@
       "kind": "backlash",
       "merr": 0,
       "offset_deg": -1.3178759725420055,
-      "raw_log": "/home/jetson/Desktop/microduck/unitree_servo/bam_data/M7_backlash_id0_20260911_201806.csv",
+      "raw_log": "unitree_servo/bam_data/units/S288-01/raw/M7_backlash_id0_20260911_201806.csv.gz",
       "settle_s": 1.8,
       "supply_v": 12.0
     },
     "inertia": {
-      "J_out": 0.000611654779979468,
+      "J_out": 0.0006549765871650145,
       "J_per_tau": [
-        0.00048325519763924344,
-        0.0006523086896160068,
-        0.000611654779979468
+        0.0006116932954790099,
+        0.0006549765871650145,
+        0.0008364621655746695
       ],
-      "J_rotor": 7.356219613330788e-09,
-      "case_c": 62,
+      "J_rotor": 7.877240192478307e-09,
+      "case_c": 59,
       "friction_used": {
-        "Fc": 0.0187,
-        "Fs": 0.014193,
-        "Fv": 0.010859,
-        "alpha": 3.4775,
-        "vs": 0.009459
+        "Fc": 0.0153815,
+        "Fs": 0.0199239,
+        "Fv": 0.0138907,
+        "alpha": 0.5,
+        "vs": 0.0253501
       },
       "kind": "inertia",
       "limit_rad": 2.0,
       "merr": 0,
-      "raw_log": "/home/jetson/Desktop/microduck/unitree_servo/bam_data/M6b_inertia_id0_20260911_201823.csv",
+      "raw_log": "unitree_servo/bam_data/units/S288-01/raw/M6b_inertia_id0_20260911_202625.csv.gz",
       "supply_v": 12.5,
       "taus": [
         0.05,
@@ -385,68 +385,109 @@
   },
   "artifacts": [
     {
-      "path": "bam_data/units/S288-01/M6a_friction_curve.csv",
+      "path": "unitree_servo/bam_data/units/S288-01/M6a_friction_curve.csv",
       "bytes": 832,
       "sha256": "1105c574ac18d65367a388022dcbd647ef5de496dcd5b38e15b8c3ef5f457340"
     },
     {
-      "path": "bam_data/units/S288-01/M6a_friction_fit_S288-01.png",
+      "path": "unitree_servo/bam_data/units/S288-01/M6a_friction_fit_S288-01.png",
       "bytes": 150855,
       "sha256": "7fdeb0448ad85dc55c13c25c94e403e8a092a6c20b0bf01b000acd7054576b65"
     },
     {
-      "path": "bam_data/units/S288-01/S288_BAM_汇总表_S288-01.md",
+      "path": "unitree_servo/bam_data/units/S288-01/S288_BAM_汇总表_S288-01.md",
       "bytes": 5097,
       "sha256": "ae2af0c00bd8103d5cb3b86e2019c441e4b151aaebea88a20cecc556f166373d"
     },
     {
-      "path": "bam_data/units/S288-01/s288_bam_friction_S288-01.json",
+      "path": "unitree_servo/bam_data/units/S288-01/s288_bam_friction_S288-01.json",
       "bytes": 1543,
       "sha256": "a0774181d403f0663ed01b8e7de88b20f0b479ea14c96ded5ccf99886a0b6aba"
     },
     {
-      "path": "bam_data/units/S288-01/logs/backlash.log",
+      "path": "unitree_servo/bam_data/units/S288-01/raw/M1M7_encoder_id0_20260911_201657.csv.gz",
+      "bytes": 95988,
+      "sha256": "96c6948e4c63b594e72a53a229c62024bd5676778a06e06643fa210f273db3c9"
+    },
+    {
+      "path": "unitree_servo/bam_data/units/S288-01/raw/M2_delay_id0_20260911_201758.csv.gz",
+      "bytes": 56561,
+      "sha256": "b578ab6b227fddced97643475f28bd8e91857d15c5f913f2a9408952f1724041"
+    },
+    {
+      "path": "unitree_servo/bam_data/units/S288-01/raw/M4_breakaway_id0_20260911_201730.csv.gz",
+      "bytes": 429988,
+      "sha256": "d219f4733b43a4867c3cd18c0a35956cb3c8b1c0a0ebab1637186ba189f599ec"
+    },
+    {
+      "path": "unitree_servo/bam_data/units/S288-01/raw/M6a_friction_sweep_id0_20260911_201700.csv.gz",
+      "bytes": 456420,
+      "sha256": "8caa02a3e0310c52a110ece5b121f7140626be3b5c86d25c6e813a973e493415"
+    },
+    {
+      "path": "unitree_servo/bam_data/units/S288-01/raw/M6b_inertia_id0_20260911_201823.csv.gz",
+      "bytes": 934,
+      "sha256": "140cbd130f5459c9f197adce48e0ab700a0fd873518578f59397a92eaf844fef"
+    },
+    {
+      "path": "unitree_servo/bam_data/units/S288-01/raw/M6b_inertia_id0_20260911_202625.csv.gz",
+      "bytes": 878,
+      "sha256": "46902c02a6388b8852d533fb08132cad16e3b73e211be86ea7dd335e1fb2ee3e"
+    },
+    {
+      "path": "unitree_servo/bam_data/units/S288-01/raw/M7_backlash_id0_20260911_201806.csv.gz",
+      "bytes": 274,
+      "sha256": "65959afc0d284469a30a8adc84ce82cad74d8802f08d497aafc57b8d00686b48"
+    },
+    {
+      "path": "unitree_servo/bam_data/units/S288-01/raw/M7_compliance_id0_20260911_201801.csv.gz",
+      "bytes": 5172,
+      "sha256": "57e556081f436ae8e9805005664d3d5873eb57d9e7edcaa360616ed4936649f5"
+    },
+    {
+      "path": "unitree_servo/bam_data/units/S288-01/logs/backlash.log",
       "bytes": 1805,
       "sha256": "cb453a2af041e4dbc470d99d09c96d605c5ca2513f76c543d63a9663d78b8a11"
     },
     {
-      "path": "bam_data/units/S288-01/logs/breakaway.log",
+      "path": "unitree_servo/bam_data/units/S288-01/logs/breakaway.log",
       "bytes": 1569,
       "sha256": "a35af1f01d71cb6edc3b3e9920b5dd1d5767ff220510af7a7d8e5eb65bfec49c"
     },
     {
-      "path": "bam_data/units/S288-01/logs/compliance.log",
+      "path": "unitree_servo/bam_data/units/S288-01/logs/compliance.log",
       "bytes": 5895,
       "sha256": "2e347cae3fa4db8a18382ba818dc8b8081122353e58cded6956c91cd2b3319ef"
     },
     {
-      "path": "bam_data/units/S288-01/logs/delay.log",
+      "path": "unitree_servo/bam_data/units/S288-01/logs/delay.log",
       "bytes": 1715,
       "sha256": "c4a351f631400a12f9a3f96c40af2456c8d23333a1adbe340bc55f58f4b83cdf"
     },
     {
-      "path": "bam_data/units/S288-01/logs/encoder.log",
+      "path": "unitree_servo/bam_data/units/S288-01/logs/encoder.log",
       "bytes": 1609,
       "sha256": "6ffb9b6b8bb3fef66fb9366c42be9ed719857fcc77af6e67059906b7b4de6381"
     },
     {
-      "path": "bam_data/units/S288-01/logs/friction_fit.log",
+      "path": "unitree_servo/bam_data/units/S288-01/logs/friction_fit.log",
       "bytes": 2773,
       "sha256": "8cfbd5730f10ee28f24c30fe42b42f6bda2b56f5bc9e7f5f2c3b7c822f5bd389"
     },
     {
-      "path": "bam_data/units/S288-01/logs/friction_sweep.log",
+      "path": "unitree_servo/bam_data/units/S288-01/logs/friction_sweep.log",
       "bytes": 5935,
       "sha256": "7e3bd7449d1d76993a55e2518de185726d9fa8cbff759c454c42a9c29d5a1b65"
     },
     {
-      "path": "bam_data/units/S288-01/logs/inertia.log",
-      "bytes": 1779,
-      "sha256": "85529e46e19178cd07ec3e8da48994f013daa9172bfd98c77ccdbf16481246a4"
+      "path": "unitree_servo/bam_data/units/S288-01/logs/inertia.log",
+      "bytes": 1783,
+      "sha256": "7547e6c6374a0a7cdb297101c900dfbad460e1eea413976f7b726b9f6eae19b5"
     }
   ],
+  "paths_relative_to": "/home/jetson/Desktop/microduck",
   "software": {
-    "git_head": "44d4723",
+    "git_head": "83d2062",
     "host": "localhost.localdomain",
     "kernel": "6.8.12-1021-tegra"
   }

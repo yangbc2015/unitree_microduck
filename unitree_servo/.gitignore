@@ -6,3 +6,9 @@ docs/*.pdf
 docs/protocol_upstream.md
 __pycache__/
 *.pyc
+
+# Scratch frame logs from a battery run (timestamped). The durable copies live inside the
+# per-unit record: bam_data/units/<label>/raw/*.csv.gz, hashed by that unit's record.json.
+# Older logs already committed stay committed -- this only stops new duplication.
+bam_data/M*_id*_2026*.csv
+bam_data/M*_id*_2026*.csv.gz

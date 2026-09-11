@@ -26,11 +26,13 @@ known, which is why the protocol says to run one unit twice before trusting any 
 from __future__ import annotations
 
 import argparse
+import gzip
 import hashlib
 import json
 import os
 import platform
 import re
+import shutil
 import statistics
 import subprocess
 import sys
@@ -42,6 +44,11 @@ DATA = os.path.join(HERE, "bam_data")
 UNITS = os.path.join(DATA, "units")
 PY = sys.executable
 MARK = "@@RESULT@@"
+
+# Artifact paths in a record are stored relative to the repository root, so they read the same
+# way as every other path in this repo. Fall back to this directory if git is unavailable.
+ROOT = subprocess.run(["git", "rev-parse", "--show-toplevel"], cwd=HERE, capture_output=True,
+                      text=True).stdout.strip() or HERE
 
 # what `run` executes, in order. Each entry: (name, argv-template)
 #   {id} {curve} {friction} {label} {stiction} {unitdir} are substituted
@@ -76,6 +83,44 @@ def sha256(path):
     return h.hexdigest()
 
 
+def to_repo_path(p):
+    """Absolute path from a tool's output -> path relative to the repo root.
+
+    Records mix paths from several scripts; keeping them all relative (and stating the base in
+    `paths_relative_to`) means a record stays readable if the tree is moved or cloned.
+    """
+    if isinstance(p, str) and os.path.isabs(p) and p.startswith(ROOT + os.sep):
+        return os.path.relpath(p, ROOT)
+    return p
+
+
+# Steps that consume another step's output. If the upstream result is missing (failed, or
+# never run for this unit), the downstream step must not quietly fall back to the built-in
+# constants -- J computed against another unit's friction is worse than no J at all.
+NEEDS = {"friction_fit": ("friction_sweep",), "inertia": ("friction_fit",)}
+
+PATHISH = ("raw_log", "curve_csv", "png", "json", "markdown")
+
+
+def keep_raw(path_repo_rel, unitdir):
+    """Copy a step's raw log into the unit directory, gzipped, and return its repo path.
+
+    Every step writes its raw log into the shared bam_data/ scratch name, where the next unit's
+    run will gzip or overwrite it -- so a record has to carry its own copy or its provenance
+    evaporates. mtime=0 keeps the compressed bytes reproducible; the artifacts list hashes this
+    copy, so a corrupted or edited log would show up.
+    """
+    src = os.path.join(ROOT, path_repo_rel)
+    if not os.path.exists(src):
+        return path_repo_rel
+    rawdir = os.path.join(unitdir, "raw")
+    os.makedirs(rawdir, exist_ok=True)
+    dst = os.path.join(rawdir, os.path.basename(src) + ".gz")
+    with open(src, "rb") as fi, gzip.GzipFile(dst, "wb", compresslevel=9, mtime=0) as fo:
+        shutil.copyfileobj(fi, fo)
+    return os.path.relpath(dst, ROOT)
+
+
 def step(name, argv, logdir, timeout=900):
     """Run one step, tee its output to a log, return (result, note)."""
     log = os.path.join(logdir, f"{name}.log")
@@ -94,6 +139,9 @@ def step(name, argv, logdir, timeout=900):
     if len(hits) > 1:
         return None, f"{len(hits)} result lines, expected 1 -- see {log}"
     r = json.loads(hits[0][len(MARK):])
+    for k in PATHISH:
+        if k in r:
+            r[k] = to_repo_path(r[k])
     print(f"  [{name}] ok in {dur:.0f}s -> {json.dumps(r, sort_keys=True)[:150]}", flush=True)
     return r, None
 
@@ -131,6 +179,12 @@ def run(a):
             continue
         if a.only and name not in a.only:
             continue
+        lack = [d for d in NEEDS.get(name, ()) if not (steps.get(d) or prev_steps.get(d))]
+        if lack:
+            why = f"needs {', '.join(lack)} for this unit, which produced no result"
+            failed.append((name, why))
+            print(f"  [{name}] NOT RUN: {why}")
+            continue
         curve = os.path.join(unitdir, "M6a_friction_curve.csv")
         if friction is None:
             pf = prev_steps.get("friction_fit") or {}
@@ -167,6 +221,8 @@ def run(a):
                     di.write(si.read())
         if name == "friction_fit":
             friction = {k: r[k] for k in ("Fc", "Fs", "vs", "alpha", "Fv")}
+        if isinstance(r, dict) and r.get("raw_log"):
+            r["raw_log"] = keep_raw(r["raw_log"], unitdir)
 
     # artifacts: hash everything this run produced, so the record can be verified later
     arts = []
@@ -175,7 +231,7 @@ def run(a):
             if f == "record.json":
                 continue
             p = os.path.join(dirpath, f)
-            arts.append(dict(path=os.path.relpath(p, HERE), bytes=os.path.getsize(p),
+            arts.append(dict(path=os.path.relpath(p, ROOT), bytes=os.path.getsize(p),
                              sha256=sha256(p)))
 
     # A record for this label may already exist: the usual reason to be here again is one
@@ -212,6 +268,7 @@ def run(a):
         "steps_failed": all_failed,
         "friction_used_for_inertia": friction or prev.get("friction_used_for_inertia"),
         "artifacts": arts,
+        "paths_relative_to": ROOT,
         "software": {
             "git_head": subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=HERE,
                                        capture_output=True, text=True).stdout.strip(),

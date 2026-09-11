@@ -1,17 +1,17 @@
 /dev/unitree_servo @ 6000000, id 0
 inertia: torque steps [0.05, 0.06, 0.07] N.m (output side) from a settled, unwound state; windows above v=1.5 rad/s are discarded (outside the friction fit)
 !! the shaft accelerates during each step -- nothing may be on the horn
-  tau=+0.0500 Nm: motion from frame 1, 279 frames (67 ms, |v| <= 1.5)
-      J_out = 0.00048 kg.m^2 (median of 12 windows, spread 0.0001-0.0017)  -> J_rotor = 5.812e-09 kg.m^2
-  tau=+0.0600 Nm: motion from frame 3, 205 frames (52 ms, |v| <= 1.5)
-      J_out = 0.00065 kg.m^2 (median of 9 windows, spread 0.0001-0.0013)  -> J_rotor = 7.845e-09 kg.m^2
-  tau=+0.0700 Nm: motion from frame 3, 178 frames (42 ms, |v| <= 1.5)
-      J_out = 0.00061 kg.m^2 (median of 8 windows, spread 0.0002-0.0011)  -> J_rotor = 7.356e-09 kg.m^2
+  tau=+0.0500 Nm: motion from frame 4, 253 frames (69 ms, |v| <= 1.5)
+      J_out = 0.00061 kg.m^2 (median of 9 windows, spread 0.0001-0.0017)  -> J_rotor = 7.357e-09 kg.m^2
+  tau=+0.0600 Nm: motion from frame 4, 208 frames (52 ms, |v| <= 1.5)
+      J_out = 0.00065 kg.m^2 (median of 10 windows, spread 0.0001-0.0010)  -> J_rotor = 7.877e-09 kg.m^2
+  tau=+0.0700 Nm: motion from frame 3, 158 frames (42 ms, |v| <= 1.5)
+      J_out = 0.00084 kg.m^2 (median of 7 windows, spread 0.0003-0.0013)  -> J_rotor = 1.006e-08 kg.m^2
 
-  across torque steps: J_out = 0.00061 kg.m^2 (spread 0.0005-0.0007)
-  rotor equivalent   : J_rotor = J_out / RATIO^2 = 7.356e-09 kg.m^2
+  across torque steps: J_out = 0.00065 kg.m^2 (spread 0.0006-0.0008)
+  rotor equivalent   : J_rotor = J_out / RATIO^2 = 7.877e-09 kg.m^2
   (RATIO^2 = 83148.0)
   Caveat: joint-space inertia of THIS assembly (reflected rotor inertia + whatever is on the shaft), taken from the highest-alpha windows. Alpha->0 windows are excluded, not averaged: J = (tau-F)/alpha diverges there.
-  raw: /home/jetson/Desktop/microduck/unitree_servo/bam_data/M6b_inertia_id0_20260911_201823.csv
-@@RESULT@@ {"J_out": 0.000611654779979468, "J_per_tau": [0.00048325519763924344, 0.0006523086896160068, 0.000611654779979468], "J_rotor": 7.356219613330788e-09, "case_c": 62, "friction_used": {"Fc": 0.0187, "Fs": 0.014193, "Fv": 0.010859, "alpha": 3.4775, "vs": 0.009459}, "kind": "inertia", "limit_rad": 2.0, "merr": 0, "raw_log": "/home/jetson/Desktop/microduck/unitree_servo/bam_data/M6b_inertia_id0_20260911_201823.csv", "supply_v": 12.5, "taus": [0.05, 0.06, 0.07], "vmax": 1.5, "win": 20}
+  raw: /home/jetson/Desktop/microduck/unitree_servo/bam_data/M6b_inertia_id0_20260911_202625.csv
+@@RESULT@@ {"J_out": 0.0006549765871650145, "J_per_tau": [0.0006116932954790099, 0.0006549765871650145, 0.0008364621655746695], "J_rotor": 7.877240192478307e-09, "case_c": 59, "friction_used": {"Fc": 0.0153815, "Fs": 0.0199239, "Fv": 0.0138907, "alpha": 0.5, "vs": 0.0253501}, "kind": "inertia", "limit_rad": 2.0, "merr": 0, "raw_log": "/home/jetson/Desktop/microduck/unitree_servo/bam_data/M6b_inertia_id0_20260911_202625.csv", "supply_v": 12.5, "taus": [0.05, 0.06, 0.07], "vmax": 1.5, "win": 20}
 servo parked (mode 0)

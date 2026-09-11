@@ -41,6 +41,13 @@
     "armature_range": [0.0004, 0.0006],
     "armature_rotor_equiv": 6.1e-09,
     "kt_implied_by_manual_stall_data": 0.001,
+    "provenance": {
+      "_what": "where the published friction fit came from, since the curve file is scratch",
+      "run": "the first full sweep on 2026-09-11 19:34",
+      "raw_log": "unitree_servo/bam_data/M6a_friction_sweep_id0_20260911_193450.csv.gz -- per-frame, timestamped, the fit can be re-derived from it",
+      "curve_file": "unitree_servo/bam_data/M6a_friction_curve_id0.csv is a scratch name: any later sweep overwrites it, so it is not the intermediate artifact to rely on. Per-unit copies live at bam_data/units/<label>/M6a_friction_curve.csv and are hashed inside that unit's record.json.",
+      "repeat_fits": "bam_data/units/S288-01/ and .../S288-01-r2/ each carry a full fit of the same unit (see stribeck_repeatability)"
+    },
     "stribeck_repeatability": {
       "_what": "the decomposition is not stable across runs, even though F(v) itself is. Same unit, same 9 speeds, same fit code.",
       "run1_20260911_193450_published": {"Fc": 0.0187, "Fs": 0.014193, "vs": 0.009459, "alpha": 3.4775, "Fv": 0.010859, "corr_Fc_Fs": -0.99},
