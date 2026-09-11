@@ -1,5 +1,14 @@
 # S288 servo port — implementation plan
 
+> **Status, 2026-09-11.** Phase 0 (facts), 1 (`bus_s288.rs`), 3 (the `robotd` alias) and 4
+> (the constants) are done, and so is phase 6 except where it depends on a measurement. Phase 2
+> (the I2C IMU) has not been started. Phase 5 is split: the values that move with the rail have
+> moved, but every gain and the actuator range are now *known*-unverified rather than assumed
+> good, and they need a bench sweep. Nothing here has run against real hardware — the whole
+> implementation has only ever seen a fake transport, and the per-unit zero offsets and signs
+> every joint needs have not been measured on the one servo that exists. § Validation below is
+> still the honest to-do list. `JETSON.md` has the deltas; the git log has the arguments.
+
 Replacing the 15 Dynamixel XL330s with Unitree S288s. This is the servo row of the
 Jetson-port status table (`docs/project/jetson-port.md`), planned in `JETSON.md` § "The seam
 that already exists". This file is the working plan: what to write, what to edit, what to

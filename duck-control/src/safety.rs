@@ -37,13 +37,20 @@ use crate::io::{IoError, JointTargets, RobotIo, Sensors};
 use crate::model::NUM_JOINTS;
 use crate::obs::Command;
 
-/// The XL330's position range: one turn, centred, from the count↔radian conversion.
+/// The actuator's position range: one turn, centred, from the XL330's count↔radian conversion.
 ///
 /// This is the *actuator's* travel, not a per-joint anatomical limit — the alpha robot's
 /// real joint limits live in the MJCF, which is not vendored here. So this catches a policy
 /// emitting `NaN`, an absurd action scale, or a garbage tensor; it will not stop a joint
 /// being driven somewhere mechanically unwise. Recorded plainly rather than dressed up,
 /// because a limit that looks per-joint but is not would imply protection nobody has.
+///
+/// **Unchanged across the servo swap, and that is a gap rather than a decision.** The S288's
+/// own travel is not the XL330's, and `bus_s288` reads a multi-turn rotor position through a
+/// 288:1 gearbox, so ±π may be neither reachable nor the right guard. Setting it from the
+/// S288's real range is bench work (`s288-servo-port.md` § phase 5); until someone does that,
+/// this is a sanity bound and not a statement about the hardware — which is all the paragraph
+/// above ever claimed it was, one servo ago.
 pub const ACTUATOR_MIN: f64 = -std::f64::consts::PI;
 pub const ACTUATOR_MAX: f64 = std::f64::consts::PI;
 
