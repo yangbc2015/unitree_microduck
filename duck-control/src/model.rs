@@ -88,6 +88,46 @@ pub fn joint_index(name: &str) -> Option<usize> {
     JOINT_NAMES.iter().position(|n| *n == name)
 }
 
+/// Per-joint travel, radians, indexed as [`JOINT_NAMES`] — the same `[lo, hi]` the MJCF
+/// declares, which is the range every policy was trained against.
+///
+/// Lifted from `kinematics/assets/alpha/robot_walk.xml`. `kinematics` already parses that file
+/// and exposes `Model::joint_range`, so this is deliberately a *copy*: the crate that drives
+/// motors should not have to link forward kinematics to find out where a joint stops. A test
+/// compares the two tables by name, so the copy cannot drift quietly.
+///
+/// **These are the training scene's limits, not a measurement of this robot.** They bound what
+/// a policy may ask for; they say nothing about where the metal stops. On the XL330 that
+/// distinction was nearly academic — a one-turn position mode, with the servo holding a range
+/// of its own. On the S288 it is not: that servo has **no firmware travel limit at all**
+/// (multi-turn absolute encoder, turn count reset by every power cycle), so if a range here is
+/// wider than the mechanism, nothing downstream will catch it. `docs/project/s288-servo-port.md`
+/// § phase 5 has the bench procedure — power the bus, hold torque off so the shaft is free,
+/// push the joint to each stop by hand, read the single-turn absolute output encoder. If a
+/// measured stop is *narrower* than a range below, the mechanism is the thing to fix, or the
+/// training scene: clamping a policy inside the range it was trained on is not a fix, it is a
+/// policy asked to walk with one leg shorter than the simulator's.
+///
+/// The mouth is the one joint the MJCF does not carry — no policy drives it — so its entry is
+/// the mouth's own travel rather than a joint limit.
+pub const JOINT_RANGE: [(f64, f64); NUM_JOINTS] = [
+    (-0.4363323129985824, 0.5235987755982988),  // left_hip_yaw
+    (-0.3839724354387516, 0.38397243543875337), // left_hip_roll
+    (-1.5707963267949037, 1.5707963267948895),  // left_hip_pitch
+    (-1.570796326794901, 1.5707963267948921),   // left_knee
+    (-1.5707963267949019, 1.5707963267948912),  // left_ankle
+    (-1.5707963267948966, 1.0471975511965976),  // neck_pitch
+    (-1.5707963267948966, 1.5707963267948966),  // head_pitch
+    (-2.967059728390364, 2.967059728390357),    // head_yaw
+    (-0.4363323129986037, 0.43633231299856107), // head_roll
+    (MOUTH_CLOSED, MOUTH_OPEN),                 // mouth
+    (-0.5235987755982988, 0.4363323129985824),  // right_hip_yaw
+    (-0.3839724354387525, 0.3839724354387525),  // right_hip_roll
+    (-1.5707963267949, 1.570796326794893),      // right_hip_pitch
+    (-1.570796326794901, 1.5707963267948921),   // right_knee
+    (-1.5707963267949028, 1.5707963267948903),  // right_ankle
+];
+
 // ── battery ──────────────────────────────────────────────────────────────────
 //
 // There is no fuel gauge and no ADC. The only measurement available is what the servos
@@ -145,6 +185,54 @@ mod tests {
     fn tables_agree_on_length() {
         assert_eq!(JOINT_NAMES.len(), NUM_JOINTS);
         assert_eq!(DEFAULT_POSITION.len(), NUM_JOINTS);
+        assert_eq!(JOINT_RANGE.len(), NUM_JOINTS);
+    }
+
+    /// Every entry must be a real interval, because `f64::clamp` **panics** when `min > max` —
+    /// and these are indexed by joint inside the control tick. A transposed pair here would take
+    /// the loop down rather than clamp anything, which is the opposite of what a limit is for.
+    #[test]
+    fn every_joint_range_is_an_interval() {
+        for (joint, &(lo, hi)) in JOINT_RANGE.iter().enumerate() {
+            let name = JOINT_NAMES[joint];
+            assert!(lo.is_finite() && hi.is_finite(), "{name}: {lo}..{hi}");
+            assert!(lo <= hi, "{name}: {lo} > {hi}");
+            assert!(lo < 0.0 && hi > 0.0, "{name} cannot reach its own zero");
+        }
+    }
+
+    /// `JOINT_RANGE` is a transcription, and this is what keeps it one. `kinematics` parses the
+    /// same XML this table was copied from, so the two are compared joint by joint — matching by
+    /// *name*, since the MJCF's order and [`JOINT_NAMES`] order are not the same list (the mouth
+    /// is absent from the tree).
+    ///
+    /// This is the whole reason the copy is allowed to exist: without it, a mechanical revision
+    /// would update the XML and leave the control loop clamping against last season's robot.
+    #[test]
+    fn the_joint_ranges_are_the_ones_the_mjcf_declares() {
+        let model = kinematics::Model::alpha();
+        for (joint, name) in JOINT_NAMES.iter().enumerate() {
+            if *name == "mouth" {
+                // No policy drives the mouth, so the MJCF has no joint for it and there is
+                // nothing to compare against — its entry is the mouth's own travel.
+                assert!(
+                    model.joint_index(name).is_none(),
+                    "the MJCF grew a mouth this table does not bound"
+                );
+                continue;
+            }
+            let tree = model
+                .joint_index(name)
+                .unwrap_or_else(|| panic!("alpha MJCF lost joint {name:?}"));
+            let declared = model
+                .joint_range(tree)
+                .unwrap_or_else(|| panic!("alpha MJCF declares no range for {name:?}"));
+            let ours = JOINT_RANGE[joint];
+            assert!(
+                (ours.0 - declared.0).abs() < 1e-12 && (ours.1 - declared.1).abs() < 1e-12,
+                "{name}: table says {ours:?}, MJCF says {declared:?}"
+            );
+        }
     }
 
     /// `MOUTH_INDEX` is used to skip a slot when mapping 14 policy actions onto 15 joints.

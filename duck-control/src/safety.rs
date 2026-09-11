@@ -34,34 +34,29 @@
 use std::time::Duration;
 
 use crate::io::{IoError, JointTargets, RobotIo, Sensors};
-use crate::model::NUM_JOINTS;
+use crate::model::{JOINT_RANGE, NUM_JOINTS};
 use crate::obs::Command;
 
-/// The actuator's position range: one turn, centred, from the XL330's count↔radian conversion.
+/// How far the *servo* can be asked to go, radians: one turn, centred — the XL330's
+/// count↔radian conversion.
 ///
-/// This is the *actuator's* travel, not a per-joint anatomical limit — and the joints' real
-/// limits are **in this repository**, in `kinematics/assets/alpha/robot_walk.xml`, which the
-/// `kinematics` crate already parses into a `range` per joint (it is `pub(crate)` today).
-/// Nothing here reads it. So this clamp catches a policy emitting `NaN`, an absurd action
-/// scale, or a garbage tensor; it will not stop a joint being driven somewhere mechanically
-/// unwise. Recorded plainly rather than dressed up, because a limit that looks per-joint but is
-/// not would imply protection nobody has.
+/// **No longer the clamp.** [`Self::apply`] holds a target inside
+/// [`crate::model::JOINT_RANGE`], because how far a joint travels is a property of the
+/// mechanism and not of the motor that moves it. This pair is the *outer* bound: the actuator's
+/// own reach, which those per-joint ranges are checked against
+/// (`no_joint_asks_for_more_travel_than_the_actuator_has`). A joint whose training range needs
+/// more than this is a robot that cannot execute its own policies, and that should fail in CI
+/// where the message can name the joint.
 ///
-/// **Two things changed with the servo, and neither is settled.**
-///
-/// 1. The S288 has **no firmware travel limit at all** — it is a multi-turn absolute encoder
-///    whose turn count simply resets on power-up — so on this robot the software is the only
-///    thing between a policy and a joint's mechanical stop. The XL330 had a one-turn position
-///    mode; this does not.
-/// 2. ±π is wide enough to cover every joint in the MJCF (the widest is `head_yaw` at ±2.967
-///    rad), which also means it does not constrain the *narrow* joints: a knee whose travel is
-///    ±1.57 rad can be commanded to 3.0. A single global pair cannot express "one turn" and
-///    "this joint's range" at the same time.
-///
-/// Closing that means clamping per joint from the MJCF's own ranges — `robotd` already depends
-/// on `kinematics`, so the data is one accessor away — and confirming on the bench that the
-/// servo can physically reach what the assembly needs, since no firmware bound will catch it if
-/// it cannot. `docs/project/s288-servo-port.md` § phase 5.
+/// **The number is still the XL330's, and on this robot it is unverified.** An S288 has **no
+/// firmware travel limit at all** — multi-turn absolute encoder, its turn count reset by every
+/// power cycle — so neither the servo nor this constant knows where the metal stops, and a
+/// command past a mechanical stop is a command the firmware will happily try to execute. What
+/// `docs/project/s288-servo-port.md` § phase 5 measures is exactly this bound: power the bus
+/// with torque off so the shaft is free, push each joint to its stops by hand, read the
+/// single-turn absolute output encoder. Those numbers belong here when they exist — and when
+/// they do, a measured stop narrower than a joint's range is a mechanism problem to fix, not a
+/// constant to quietly shrink.
 pub const ACTUATOR_MIN: f64 = -std::f64::consts::PI;
 pub const ACTUATOR_MAX: f64 = std::f64::consts::PI;
 
@@ -293,8 +288,14 @@ impl<T: RobotIo> Safety<T> {
         }
 
         let mut safe = targets;
-        for value in safe.iter_mut() {
-            let clamped = value.clamp(ACTUATOR_MIN, ACTUATOR_MAX);
+        for (joint, value) in safe.iter_mut().enumerate() {
+            // Per joint, from the MJCF's own ranges — see `model::JOINT_RANGE`. One global pair
+            // cannot say both "this is one turn of a servo" and "this knee stops at ninety
+            // degrees", and it is the second that keeps a policy out of the chassis. `clamp`
+            // panics if the pair is transposed, which `model`'s own test rules out before this
+            // ever runs.
+            let (lo, hi) = JOINT_RANGE[joint];
+            let clamped = value.clamp(lo, hi);
             if clamped != *value {
                 if !applied.limited_by(Limit::Range) {
                     applied.limits.push(Limit::Range);
@@ -454,7 +455,7 @@ mod tests {
         assert!(s.fallen(), "the verdict is still tracked");
 
         let mut wanted = DEFAULT_POSITION;
-        wanted[0] = 0.9;
+        wanted[0] = 0.3; // inside `left_hip_yaw`'s travel, and away from the home pose
         let applied = s
             .apply(
                 wanted,
@@ -488,7 +489,7 @@ mod tests {
         assert!(s.fallen(), "the verdict is still tracked");
 
         let mut wanted = DEFAULT_POSITION;
-        wanted[0] = 0.9;
+        wanted[0] = 0.3; // inside `left_hip_yaw`'s travel, and away from the home pose
         let applied = s
             .apply(
                 wanted,
@@ -547,22 +548,46 @@ mod tests {
 
     /// Out-of-range targets are clamped and reported. Reported matters: a client whose
     /// command was silently altered has no way to know why the robot is not doing as asked.
+    ///
+    /// The bound is the **joint's** travel now, not the actuator's. That distinction is the
+    /// whole point of the per-joint table: `left_hip_pitch` stops at ±π/2 and `head_yaw` runs
+    /// wider than anything else on the robot. Clamping both to ±π would pass a test written
+    /// against one global pair and still let a knee be commanded a hundred degrees past its stop.
     #[test]
     fn out_of_range_targets_are_clamped_and_reported() {
         let mut s = safety();
         s.observe(&upright(), Duration::from_millis(20));
 
         let mut wild = DEFAULT_POSITION;
-        wild[2] = 100.0;
-        wild[7] = -100.0;
+        wild[2] = 100.0; // left_hip_pitch
+        wild[7] = -100.0; // head_yaw
         let applied = s
             .apply(wild, DEFAULT_POSITION, SafetyConfig::default().gain_running)
             .unwrap();
 
         assert!(applied.limited_by(Limit::Range));
         let written = s.io().last_written.unwrap().positions;
-        assert_eq!(written[2], ACTUATOR_MAX);
-        assert_eq!(written[7], ACTUATOR_MIN);
+        assert_eq!(written[2], JOINT_RANGE[2].1);
+        assert_eq!(written[7], JOINT_RANGE[7].0);
+        // The hip's stop is inside one turn, so a clamp at ±π would be a different answer.
+        assert!(
+            written[2] < ACTUATOR_MAX,
+            "the clamp must be tighter than a turn"
+        );
+        assert!(written[7] < ACTUATOR_MIN.abs());
+    }
+
+    /// The per-joint ranges are what a *policy* may ask for; [`ACTUATOR_MIN`]/[`ACTUATOR_MAX`] is
+    /// what the servo can be asked to do at all. A joint whose training range reaches past the
+    /// actuator's is a robot that cannot execute its own policies — and it should fail here,
+    /// where the message names the joint, rather than at 50 Hz on a bench.
+    #[test]
+    fn no_joint_asks_for_more_travel_than_the_actuator_has() {
+        for (joint, &(lo, hi)) in JOINT_RANGE.iter().enumerate() {
+            let name = crate::model::JOINT_NAMES[joint];
+            assert!(lo >= ACTUATOR_MIN, "{name}: {lo} is past {ACTUATOR_MIN}");
+            assert!(hi <= ACTUATOR_MAX, "{name}: {hi} is past {ACTUATOR_MAX}");
+        }
     }
 
     /// An ordinary tick must pass through untouched, or the clamp is silently mangling
