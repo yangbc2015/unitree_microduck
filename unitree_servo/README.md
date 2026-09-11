@@ -41,6 +41,7 @@ SUBSYSTEM=="tty", ENV{ID_VENDOR_ID}=="2e3c", ENV{ID_MODEL_ID}=="7640", \
 | `bam_dynamics.py` | 动力学标定 CLI：`delay` / `compliance` / `backlash` / `inertia` / `sine` |
 | `bam_fit.py` | Stribeck 拟合 + 出图 + 生成 json/汇总表 |
 | `probe_ports.py` | 不依赖任何假设，直接扫 ttyACMx 找哪一个是舵机总线 |
+| `selftest.py` | 离台自检：编译/导入、两段拟合用合成数据反演已知真值、json 与代码常量一致、第三方不入库。改完协议层或参数后跑一遍 |
 | `verify_official_issues.py` | 用**官方原代码 + 真机帧**验证官方文档/例程的每一个问题（可交给官方复现） |
 | `docs/宇树数字舵机_官方文档与例程问题报告.md` | **给官方的独立问题报告**（A 类 4 条会导致实现错误 + B 类 9 条文档缺陷，逐条带证据与建议） |
 | `docs/verify_official_issues_output.txt` | 上面那份验证脚本的运行输出留档 |

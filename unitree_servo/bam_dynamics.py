@@ -29,6 +29,7 @@ import os
 import statistics
 import time
 from datetime import datetime
+from typing import NamedTuple
 
 import serial
 
@@ -136,6 +137,89 @@ def park(m, mid):
 
 # ---------------------------------------------------------------- delay (M2)
 
+class DelayFit(NamedTuple):
+    td: float                       # transport delay, ms
+    tau: float                      # first-order rise time constant, ms
+    A: float                        # fitted step amplitude, torque counts
+    rms: float                      # residual, torque counts
+    n: int                          # samples fitted
+    td_band: tuple[float, float] | None   # td values whose SSE stays within 10%
+
+
+def fit_delay_response(T, Y, step_n) -> DelayFit | None:
+    """Fit  y = A*(1 - exp(-(t-td)/tau)) for t>td  to raw (t, y) samples.
+
+    A is linear given (td, tau), so the grid is only over those two. Returns the best
+    parameters, the rms residual, and the td band whose SSE stays within 10% of the
+    minimum (how sharply the delay is actually pinned down).
+    """
+    import numpy as np
+    T = np.asarray(T, dtype=float)
+    Y = np.asarray(Y, dtype=float)
+    best = None
+    for td in np.arange(0.0, 1.5, 0.01):
+        x = T - td
+        lag = np.where(x > 0, 1.0, 0.0)
+        for tau in np.arange(0.03, 1.2, 0.01):
+            f = np.where(x > 0, (1.0 - np.exp(-x / tau)) * lag, 0.0)
+            den = float(f @ f)
+            if den <= 0:
+                continue
+            A = float(f @ Y) / den
+            sse = float(((Y - A * f) ** 2).sum())
+            if best is None or sse < best[0]:
+                best = (sse, td, tau, A)
+    if best is None:
+        return None
+    sse, td, tau, A = best
+    band = []
+    for td2 in np.arange(max(0.0, td - 0.5), td + 0.5, 0.01):
+        x = T - td2
+        f = np.where(x > 0, 1.0 - np.exp(-x / tau), 0.0)
+        den = float(f @ f)
+        A2 = float(f @ Y) / den if den > 0 else 0.0
+        if float(((Y - A2 * f) ** 2).sum()) < sse * 1.10:
+            band.append(td2)
+    return DelayFit(float(td), float(tau), float(A), math.sqrt(sse / len(T)), len(T),
+                    (float(min(band)), float(max(band))) if band else None)
+
+
+class SineFit(NamedTuple):
+    J: float
+    r2: float
+    amp: float
+    drift: float
+    alpha_rms: float
+    v_rms: float
+    resid_rms: float
+    n: int
+
+
+def fit_sine_inertia(t, pos, tor, w) -> SineFit:
+    """Fit J from a sinusoidally driven record:  J = (tau - F(v)) / alpha.
+
+    alpha and v come from fitting the recorded position to sin/cos of the *known* drive
+    frequency plus a drift term -- far less noisy than double-differencing the encoder.
+    F(v) is the measured friction model, so this only works once friction is known.
+    """
+    import numpy as np
+    t = np.asarray(t, dtype=float)
+    pos = np.asarray(pos, dtype=float)
+    tor = np.asarray(tor, dtype=float)
+    M = np.column_stack([np.ones_like(t), np.sin(w * t), np.cos(w * t), t])
+    (c0, c1, c2, c3), *_ = np.linalg.lstsq(M, pos, rcond=None)
+    alpha = -(w * w) * (c1 * np.sin(w * t) + c2 * np.cos(w * t))
+    v = w * (c1 * np.cos(w * t) - c2 * np.sin(w * t)) + c3
+    y = tor - np.array([friction_nm(x) for x in v])
+    J = float(alpha @ y) / float(alpha @ alpha)
+    resid = y - J * alpha
+    ss = float(((y - y.mean()) ** 2).sum())
+    return SineFit(J, 1 - float(resid @ resid) / ss if ss > 0 else float("nan"),
+                   math.hypot(c1, c2), float(c3),
+                   float(np.sqrt((alpha ** 2).mean())), float(np.sqrt((v ** 2).mean())),
+                   math.sqrt(float(resid @ resid) / len(resid)), len(t))
+
+
 def cmd_delay(m, a):
     """Torque step, magnitude below breakaway -> the shaft cannot move, so what we time
     is the command reaching the servo and showing up in its own reported torque.
@@ -231,38 +315,18 @@ def cmd_delay(m, a):
     T = np.array(T)
     Y = np.array(Y)
     step_n = 2 * a.tau_delay / RATIO * 256000
-    best = None
-    for td in np.arange(0.0, 1.5, 0.01):
-        x = T - td
-        lag = np.where(x > 0, 1.0, 0.0)
-        for tau in np.arange(0.03, 1.2, 0.01):
-            f = np.where(x > 0, (1.0 - np.exp(-x / tau)) * lag, 0.0)
-            den = float(f @ f)
-            if den <= 0:
-                continue
-            A = float(f @ Y) / den
-            sse = float(((Y - A * f) ** 2).sum())
-            if best is None or sse < best[0]:
-                best = (sse, td, tau, A)
-    sse, td, tau, A = best
-    rms = math.sqrt(sse / len(T))
-    # how sharp is td? SSE within 10% of the minimum
-    band = []
-    for td2 in np.arange(max(0.0, td - 0.5), td + 0.5, 0.01):
-        x = T - td2
-        f = np.where(x > 0, 1.0 - np.exp(-x / tau), 0.0)
-        den = float(f @ f)
-        A2 = float(f @ Y) / den if den > 0 else 0.0
-        s2 = float(((Y - A2 * f) ** 2).sum())
-        if s2 < sse * 1.10:
-            band.append(td2)
-    print(f"\n  fit on {len(T)} raw samples from {len(fitted)} transitions")
-    print(f"    transport delay td  = {td:.3f} ms"
-          + (f"   (within 10% of best: {min(band):.2f}-{max(band):.2f} ms)" if band else ""))
-    print(f"    torque rise tau     = {tau:.3f} ms   -> 10-90% rise {2.2*tau:.3f} ms")
-    print(f"    amplitude A         = {A:.2f} counts = {A/256000*RATIO*1000:.2f} mN.m "
+    fit = fit_delay_response(T, Y, step_n)
+    if fit is None:
+        print("  fit failed")
+        return
+    print(f"\n  fit on {fit.n} raw samples from {len(fitted)} transitions")
+    print(f"    transport delay td  = {fit.td:.3f} ms"
+          + (f"   (within 10% of best: {fit.td_band[0]:.2f}-{fit.td_band[1]:.2f} ms)"
+             if fit.td_band else ""))
+    print(f"    torque rise tau     = {fit.tau:.3f} ms   -> 10-90% rise {2.2*fit.tau:.3f} ms")
+    print(f"    amplitude A         = {fit.A:.2f} counts = {fit.A/256000*RATIO*1000:.2f} mN.m "
           f"output (commanded {2*a.tau_delay*1000:.0f} mN.m)")
-    print(f"    residual rms        = {rms:.2f} counts (feedback noise is ~1 count)")
+    print(f"    residual rms        = {fit.rms:.2f} counts (feedback noise is ~1 count)")
     print("  -> a first-order torque rise of this shape is what a BAM actuator model needs; "
           "the delay is the transport part in front of it.")
     print(f"\n  raw: {log.path}")
@@ -430,23 +494,14 @@ def cmd_sine(m, a):
     t = np.array([d["t"] for d in rec])
     p = np.array([d["out_pos"] for d in rec])
     tor = np.array([d["tor_out"] for d in rec])
-    M = np.column_stack([np.ones_like(t), np.sin(w * t), np.cos(w * t), t])
-    coef, *_ = np.linalg.lstsq(M, p, rcond=None)
-    c0, c1, c2, c3 = coef
-    A = math.hypot(c1, c2)
-    alpha = -(w * w) * (c1 * np.sin(w * t) + c2 * np.cos(w * t))
-    v = w * (c1 * np.cos(w * t) - c2 * np.sin(w * t)) + c3
-    y = tor - np.array([friction_nm(x) for x in v])
-    J = float(alpha @ y) / float(alpha @ alpha)
-    resid = y - J * alpha
-    r2 = 1 - float(resid @ resid) / float(((y - y.mean()) ** 2).sum())
-    print(f"  fitted amplitude {A:.4f} rad (commanded {a.amp}), "
-          f"drift {c3:+.5f} rad/s")
-    print(f"  frames {len(rec)} over {t[-1]:.2f}s, mean |alpha| {np.abs(alpha).mean():.4f} "
-          f"rad/s^2, mean |v| {np.abs(v).mean():.4f} rad/s")
-    print(f"  J_out   = {J:.5f} kg.m^2  (R^2 of the tau-vs-alpha fit: {r2:.4f})")
-    print(f"  J_rotor = {J/RATIO/RATIO:.3e} kg.m^2")
-    print(f"  residual rms {math.sqrt(float(resid @ resid)/len(resid))*1000:.3f} mN.m")
+    fit = fit_sine_inertia(t, p, tor, w)
+    print(f"  fitted amplitude {fit.amp:.4f} rad (commanded {a.amp}), "
+          f"drift {fit.drift:+.5f} rad/s")
+    print(f"  frames {fit.n} over {t[-1]:.2f}s, rms alpha {fit.alpha_rms:.4f} "
+          f"rad/s^2, rms v {fit.v_rms:.4f} rad/s")
+    print(f"  J_out   = {fit.J:.5f} kg.m^2  (R^2 of the tau-vs-alpha fit: {fit.r2:.4f})")
+    print(f"  J_rotor = {fit.J/RATIO/RATIO:.3e} kg.m^2")
+    print(f"  residual rms {fit.resid_rms*1000:.3f} mN.m")
     print(f"  raw: {log.path}")
 
 
