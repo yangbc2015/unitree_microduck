@@ -66,6 +66,15 @@ if [ -f "$REPO/deploy/jetson/20-mount.conf" ]; then
   echo "    mediad.service.d/20-mount.conf"
 fi
 
+# The third board delta of the same kind: the frame stream the local VLM reads, off the same tee the
+# console's video comes from (see the file). It repeats `--rotate 0`, because both drop-ins set
+# `ExecStart` and systemd honours the one in the file that sorts last.
+if [ -f "$REPO/deploy/jetson/30-stream.conf" ]; then
+  sudo mkdir -p /etc/systemd/system/mediad.service.d
+  sudo cp -f "$REPO/deploy/jetson/30-stream.conf" /etc/systemd/system/mediad.service.d/
+  echo "    mediad.service.d/30-stream.conf"
+fi
+
 echo "==> 4/7 creating robot group + daemon users (sysusers)"
 sudo cp -f "$REPO/updater/systemd/sysusers.d/robot.conf" /usr/lib/sysusers.d/robot.conf
 for s in "${SYSUSERS[@]}"; do

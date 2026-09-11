@@ -89,6 +89,45 @@ For anyone replacing the analyser, the socket is intentionally boring:
 The JPEG is produced by the same `jpeg_encoder` used for the console's frame-stream branch, so
 `--stream-longest`/`--stream-quality` trade bytes for detail before anything reaches the model.
 
+## Running it at boot (this board)
+
+Both halves come up with no browser and nobody logged in: `mediad` is the system service it always
+was, and the analyser is a *user* service (`duck-vision.service`, `WantedBy=default.target`, with
+`loginctl enable-linger` in place) so it can reach the same llama-server that owns the model on
+`:8081`.
+
+The video path is untouched - that is the whole point of tapping the tee rather than opening a second
+source. The flags are added by a drop-in, `deploy/jetson/30-stream.conf`, which also repeats
+`--rotate 0`: two drop-ins cannot both own `ExecStart` (the one that sorts last wins), so
+`20-mount.conf`'s command line is superseded while its reasoning still stands. Install with
+`scripts/deploy-jetson-skeleton.sh`, or by hand into `/etc/systemd/system/mediad.service.d/`, then
+check what the daemon actually received before believing the file:
+
+    $ systemctl show mediad -p ExecStart
+    ExecStart={ path=/opt/robot/daemon/current/bin/mediad ; argv[]=... --rotate 0 --stream-to ws://127.0.0.1:8765/frames ... }
+
+The proof that this is additive is the console's own meter plus a caption, side by side - one mediad,
+one Argus session, both consumers fed:
+
+    $ sudo cat /run/mediad/camera.json
+    {"fps":30.0,"targetFps":30,"width":1280,"height":720,"format":"UYVY","frames":2164,"dropped":0,"consumers":0}
+    $ journalctl --user -u duck-vision -f
+    [17:50:34] frame 70 (45879 bytes, 5.9s)
+    画面偏紫暗，物体模糊不清，无明显无线缆或障碍，未见人。
+
+A board-specific guard rides along with it. **llama-server does not give back what a multimodal
+request allocates** (measured 2026-09-11: a staircase of roughly 16-60 MiB per request - flat
+stretches, then jumps - never released for the life of the process; upgrading llama.cpp did not
+change it). With the loop on all day that drift reaches the unit's `MemoryMax=6G` and the kernel
+kills the model, which on this board means the console's model too. So the rig runs a user timer,
+`llama-anon-guard.timer`, every two minutes: when llama-server's cgroup `anon` crosses 2 GiB it
+restarts the server - about six seconds, the camera never blinks. `DRY_RUN=1` says what it would do
+without doing it; `THRESH_BYTES` and `MIN_GAP_SECONDS` bound it. A fresh server sits at ~0.27 GiB, so
+the ceiling is ~8x the baseline and still leaves >2 GiB before the cap.
+
+That guard is a fact about *this* board, where the model and the console share one 8 GB pool. Point
+`LLAMA_URL` at a machine that is not also running the console and there is nothing to restart.
+
 ## Pitfalls
 
 - **`nvargus-daemon` must be running.** If `mediad` reports an Argus connection failure and produces
