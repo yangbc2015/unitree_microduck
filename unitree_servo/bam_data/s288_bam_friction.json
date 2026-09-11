@@ -1,0 +1,40 @@
+{
+  "_comment": "S288 BAM friction params, measured on Jetson 2026-09-11, 12.0V, output-side N.m. FOC closed loop => no kt/R needed. TBD = not measured yet. NOTE: the Fc/Fs split from the Stribeck fit is weakly identified (corr(Fc,Fs)~-1); prefer the robust measured numbers in _robust when a single value is needed.",
+  "motor": "Unitree S288 (ID 0, fw unknown)",
+  "ratio": 288.3539094650206,
+  "friction_base": 0.0187,
+  "friction_stribeck": 0.014193,
+  "friction_viscous": 0.010859,
+  "dtheta_stribeck": 0.009459,
+  "alpha": 3.4775,
+  "_robust": {
+    "breakaway_torque": 0.0365,
+    "breakaway_bracket": [
+      0.035,
+      0.0375
+    ],
+    "stall_plateau_torque": 0.03289862429021391,
+    "dip_torque": 0.018507024080531512,
+    "dip_speed": 0.0376504964584819,
+    "plateau_torque_0.03_0.4": 0.020504514273466577,
+    "viscous_slope_0.4_1.2": 0.00959586172066889,
+    "torque_offset_bias": -0.003
+  },
+  "load_friction_motor": null,
+  "load_friction_external": null,
+  "kt": null,
+  "R": null,
+  "armature": null,
+  "q_offset": null,
+  "command_delay": null,
+  "_measurement": {
+    "method": "velocity sweep kp=0 kd=2, paired +/- directions, 4 kHz loop",
+    "torque_source": "servo's own rotor torque feedback (256000 counts = 1 N.m)",
+    "torque_lsb_output_nm": 0.0011263824588477367,
+    "n_points": 9,
+    "rms_residual_nm": 0.000974,
+    "corr_Fc_Fs": -0.4432,
+    "speed_and_temp": "12.0-12.5V, 54-60C, free shaft (gravity bias < 0.004 N.m)",
+    "caveat": "v > 1.2 rad/s points are noisy (torque sd jumps to ~110 counts)"
+  }
+}

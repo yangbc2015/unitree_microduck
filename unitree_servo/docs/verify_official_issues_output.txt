@@ -1,0 +1,123 @@
+==============================================================================
+B1  specs/protocol.md 的 feedback 字段表算出来是 20 字节, 帧里只有 19
+==============================================================================
+  帧长等式      : 26 = head(2) + mode(1) + fbk(19) + crc(4)  ->  fbk = 19
+  protocol.md 表: temp1 sensor1 vol(uint16)2 torque2 speed2 pos4 MError4 OutPos/ExFlag2 ExSensor2_1 ExCom_1 = 20  <-- 多 1 字节
+  使用手册      : 同上但 vol(uint8)1 + res(uint16)2              = 19
+  STM32 RIS_Fbk_t: temp1 sensor1 vol(uint8)1 ... ExSensor2_1 ExCom_1 = 19
+  结论: 只有 protocol.md 把 vol 当成 uint16, 于是表长变成 20, 与它自己上面写的
+        '| 3 | 19 | fbk |' 自相矛盾。三份官方文档里它是唯一的例外。
+
+==============================================================================
+B2  vol 的类型在官方四处有四种写法
+==============================================================================
+  specs/protocol.md        : uint16,  frames bytes 2-3,  value/2 = volts
+  使用手册 MotorData_t     : uint8,   255 表示 127.5V
+  STM32 protocol.h RIS_Fbk_t: uint8,   '电机端电压 0-127.5V 255表示127.5V'
+  python/servo_demo.py     : int8      '<bbb hh i I H BB'
+
+  实测帧: fc ee 00 36 2d 18 f4 ff 00 00 1b 94 29 00 00 00 00 00 3f 09 00 00 d4 f4 dc 42
+
+  uint8(手册/STM32): vol_raw=24 -> 12.0 V
+     配套: temp=54C sensor=45C torque=-12->-0.01352 Nm(out) pos=2724891->1.8120 rad(out) OutPos=2367->1.8155 rad MError=0x0 ExFlag=0
+     -> 12.0 V 与实测供电一致, 其余字段全部物理自洽  ==>  uint8 才是对的
+
+  uint16(protocol.md): vol_raw=62488 -> 31244.0 V   <-- 不可能; 且后续字段全体右移 1 字节
+  int8(servo_demo.py): vol_raw=24 -> 12.0 V  (本帧巧合正确)
+      raw=0x7F: int8= 127 ->   63.5 V   应为  63.5 V
+      raw=0x80: int8=-128 ->  -64.0 V   应为  64.0 V   <-- 符号翻转
+      raw=0xFF: int8=  -1 ->   -0.5 V   应为 127.5 V   <-- 符号翻转
+
+==============================================================================
+B3  servo_demo.build_control_packet(): 不能发负位置目标
+==============================================================================
+  pos_des=-0.1 rad -> struct.error: 'I' format requires 0 <= number <= 4294967295
+  pos_des=+0.1 rad -> OK : fe ee 10 00 00 00 00 00 6e 4b 02 00 00 00 00 00 c5 21 a8 d4
+  tor_des=-0.05  -> OK (tor 用的是 'h', 有符号, 写法正确)
+  代码: struct.pack('<hhIhh', tor, spd, pos, k_pos, k_spd)   <- 'I' = unsigned int32
+  手册 ControlData_t: int32_t pos_des;   /  STM32 RIS_Comd_t: int32_t pos_des;
+  -> 两个官方 C 定义都是有符号, 只有 Python 例程写成无符号. 修复: '<hhihh'
+  -> 影响: 任何负角度目标(机器人关节下半程!)直接抛异常, 例程完全无法做双向运动
+
+==============================================================================
+B4  crc_ccitt.h / servo_demo.crc32_lookup: len 必须是 4 的倍数, 但没说也没检查
+==============================================================================
+  uint32_t crc32_lookup_byte_by_byte(const uint8_t* data, size_t len)
+  { ... size_t word_count = len / 4;  for (i = 0; i < word_count; ++i) ... }
+  函数名叫 byte_by_byte, 实际按 4 字节字处理 —— 这本身是算法要求(见 B5),
+  但 len 不是 4 的倍数时尾部字节被静默丢弃、不报错, 调用者拿不到任何提示。
+  python/servo_demo.crc32_lookup 用 'while i + 3 < n' 同样静默丢弃。
+  len=16: 官方函数 0x081B46CA == 前 16 字节的结果 0x081B46CA -> True
+  len=17: 官方函数 0x081B46CA == 前 16 字节的结果 0x081B46CA -> True   <-- 尾部字节被丢弃
+  len=19: 官方函数 0x081B46CA == 前 16 字节的结果 0x081B46CA -> True   <-- 尾部字节被丢弃
+  len=20: 官方函数 0x395DDB62 == 前 20 字节的结果 0x395DDB62 -> True
+  len=21: 官方函数 0x395DDB62 == 前 20 字节的结果 0x395DDB62 -> True   <-- 尾部字节被丢弃
+  len=26: 官方函数 0xFF0D1223 == 前 24 字节的结果 0xFF0D1223 -> True   <-- 尾部字节被丢弃
+  当前调用点传 16 和 20, 都是 4 的倍数, 所以现在不出错。但:
+   (a) 文档从未说明'长度必须是 4 的倍数'这个约束;
+   (b) 使用者若按 protocol.md 的字段表对 19 字节 fbk 求 CRC, 会静默得到错误值;
+   (c) 头文件叫 crc_ccitt.h, 但算法是 CRC-32 (poly 0x04C11DB7), 与 CCITT(16bit,
+       0x1021) 无关, 命名会误导。
+
+==============================================================================
+B5  CRC32 的真实算法文档里没写, 也没给测试向量  <-- 最严重的一条
+==============================================================================
+  控制包测试向量 (CRC 覆盖 bytes 0..15, 共 16 字节):
+    fe ee 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+    硬件帧内 CRC 字节 80 46 20 79 -> 0x79204680
+      CRC-32/MPEG-2 按内存字节顺序   -> 0xFCADA9FB  WRONG
+      按 4 字节小端字处理(真实算法)  -> 0x79204680  MATCH
+      官方 servo_demo.crc32_lookup   -> 0x79204680  MATCH
+
+  反馈包测试向量 (CRC 覆盖 bytes 2..21, 共 20 字节, 不含帧头):
+    00 36 2d 18 f4 ff 00 00 1b 94 29 00 00 00 00 00 3f 09 00 00
+    硬件帧内 CRC 字节 d4 f4 dc 42 -> 0x42DCF4D4
+      按内存字节顺序                 -> 0x29CB30E1  WRONG
+      按 4 字节小端字处理(真实算法)  -> 0x42DCF4D4  MATCH
+      官方 servo_demo.crc32_lookup   -> 0x42DCF4D4  MATCH
+
+  protocol.md 只写了一句:
+     "Polynomial: 0x04C11DB7 (same as IEEE 802.3, but bit-reversed processing)
+      Initial value: 0xFFFFFFFF"
+  问题:
+   1) 这句话不足以复现算法。真实算法是: 把 buffer 当作 4 字节小端字数组, 每个字从 MSB
+      到 LSB 依次送入 CRC-32/MPEG-2 (即每个 4 字节组内部倒序), 而不是按内存字节流顺序。
+      用上面两个向量可以立刻验证: 按字节流顺序算会得到完全不同的值。
+   2) "same as IEEE 802.3, but bit-reversed processing" 这个说法不准确:
+        CRC-32/MPEG-2      : poly 0x04C11DB7, init 0xFFFFFFFF, refin=false, refout=false, xorout=0
+        CRC-32/ISO-HDLC    : poly 0x04C11DB7(反射实现为 0xEDB88320), refin/refout=true,
+        (IEEE 802.3)         xorout=0xFFFFFFFF
+      两者是不同的算法。文档没写 refin/refout/xorout。
+   3) 直接套标准库一定失败(zlib.crc32 等), 且没有任何测试向量可以自查。
+  建议: spec 里补上完整参数 + 上面两个"帧实测"测试向量 + 一段 10 行的参考实现。
+
+
+==============================================================================
+B6  同一字段的枚举值在官方三处不一致
+==============================================================================
+  RIS_Mode_t.status (STM32 protocol.h): 0.锁定 1.FOC闭环 2.编码器校准 3.保留
+  MotorCmd_t.mode  (STM32 protocol.h): 0:空闲 1:FOC控制  2:电机标定
+  MotorData_t.mode (STM32 protocol.h): 0:空闲 1:FOC控制  2:电机标定
+  使用手册 §9 的 RIS_Mode_t         : 0.锁定 1.FOC闭环   (只列了 2 个)
+  specs/protocol.md                 : 0 = stop & lock torque; 1 = hybrid closed-loop
+  而 modify_data() 里 SATURATE(mode, 0, 1) -> 2/3 在参考实现里根本发不出去
+  -> 3 bit 的模式字段实际只有 0/1 可用已被隐含, 但文档没说清楚。
+
+==============================================================================
+B7  舵机数量: 仓库说 16, 手册说 15
+==============================================================================
+  protocol.md     : | Bus capacity | Up to 16 servos (ID 0–15, ID 15 = broadcast, no response) |
+  README.md       : | Bus ID | 0 – 15 | Up to 16 servos on one bus (15 = broadcast) |
+  README.zh-CN / 使用手册 §7: 最大支持一条总线上连接 15 个舵机（地址 0~14，15 为广播）
+  -> 英文文档写 'ID 0-15, ID 15 = broadcast' 字面自相矛盾(ID 15 既是舵机又是广播)
+
+==============================================================================
+B8  python/README.md 的接线说明与仓库其它文档冲突
+==============================================================================
+  python/README.md  : 'Connect PC serial adapter (USB-to-TTL) to the servo bus'
+  stm32/porting-guide.md: 'You cannot connect MCU TX/RX pins directly to the servo
+                      - a half-duplex transceiver adapter is required.'
+  使用手册 §7       : 必须经'单总线串口转 USB 模块'
+  -> 单总线是半双工 1-Wire, 直连 USB-TTL 的 TX/RX 收不到回包(实测必须用官方转接板)
+  -> 另外 python/README.md 建议 'verify baud rate = 6 Mbps' 并给 /dev/ttyUSB0,
+     但官方转接板是 USB CDC, 枚举成 /dev/ttyACM*, 波特率是虚拟值; 文档未说明。

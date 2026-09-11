@@ -58,6 +58,15 @@ Additive (no core changes):
 - `duck-control/src/bus_s288.rs`: **not written yet.** A `RobotIo` impl speaking the Unitree S288 protocol
   (docs and examples: github.com/unitreerobotics/digital_servo - `specs/protocol.md`,
   `python/servo_demo.py`). CRC plus the position/speed conversion factors.
+  `unitree_servo/` is the local ground truth for writing it: a working host-side implementation, a
+  bench CLI, and the frames it was checked against. **Do not implement from the upstream spec
+  alone** - three things in it are wrong, all reproduced in `unitree_servo/verify_official_issues.py`:
+  `specs/protocol.md` types the feedback `vol` as uint16 (it is uint8; the table then sums to 20
+  bytes against a 19-byte `fbk`), `python/servo_demo.py` packs `pos_des` unsigned so no negative
+  angle target can be sent, and neither documents that the CRC walks 4-byte little-endian words
+  MSB-first rather than the byte stream - so no standard CRC library reproduces it. The folder also
+  carries measured friction/breakaway numbers for one S288 (`bam_data/`), and a report of these
+  findings addressed to Unitree (`docs/`).
 - IMU: **not written yet.** An LSM6DSV16X reader over I2C, feeding `Sensors.imu` from the same
   `read()`.
 - `deploy/robotd.toml`: serial port, camera device, model paths, policy slots. Installed to
