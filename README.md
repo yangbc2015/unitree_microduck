@@ -43,7 +43,7 @@ nothing else that matters: the capture path, the video encoder, the servo bus an
 | | upstream (Radxa Zero 3W) | this fork (Jetson Orin Nano) | state |
 |---|---|---|---|
 | build | cross-compiled, glibc pinned | native aarch64, whole workspace clean | done |
-| servos | 15x Dynamixel XL330, Protocol 2.0, `/dev/ttyS2` | 15x Unitree S288, 6 Mbps custom protocol | not ported |
+| servos | 15x Dynamixel XL330, Protocol 2.0, `/dev/ttyS2` | 15x Unitree S288, 6 Mbps custom protocol | code done, unverified on hardware |
 | IMU | `imu_to_dxl` board on the servo bus | LSM6DSV16X over I2C | not ported |
 | capture | rkisp, `v4l2src` on `/dev/video0` | Argus, `nvarguscamerasrc` on a CSI port | ported |
 | exposure | `rkaiq` 3A, plus a software loop | the ISP, which never stops converging | ported |

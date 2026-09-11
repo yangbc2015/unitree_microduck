@@ -662,7 +662,7 @@ mod tests {
             "entry_pose": "standing", "duration_s": null,
             "description": "Stand on one foot, either side, on command.",
             "command": { "head": "unused (zeros)" },
-            "robot": { "model": "microduck", "hw_rev": 1, "servos": "xl330" },
+            "robot": { "model": "microduck", "hw_rev": 1, "servos": "s288" },
             "training": { "task_id": "Mjlab-FlamingoCycleHard-Flat-MicroDuck" }
         }));
         assert_eq!(m.name.as_deref(), Some("flamingo-cycle"));

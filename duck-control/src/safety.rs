@@ -69,6 +69,14 @@ impl Default for SafetyConfig {
     fn default() -> Self {
         Self {
             // The prototype's numbers.
+            //
+            // The tilt threshold, the debounce and the deadman are not servo properties and
+            // carry over unchanged. The two gains are the exception the swap did not leave
+            // alone: 200 and 50 are XL330 position-P register values, and they reach an S288
+            // through `bus_s288::set_gain`, which takes the number as already being in *that*
+            // firmware's unit. Nothing has measured the two scales against each other, so this
+            // pair is the starting point for a bench sweep rather than a tuned one — see
+            // `bus_s288::Config::kp` for why the translation is deliberately not guessed here.
             fall_gravity_z: -0.5,
             fall_debounce: Duration::from_millis(200),
             deadman: Duration::from_millis(500),

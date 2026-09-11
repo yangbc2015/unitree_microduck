@@ -260,6 +260,16 @@ intended:
 
 ### 2.1 The bus layer and `RobotIo`
 
+> **Fork note.** What follows describes the **XL330 bus** — the registers it asserts, the
+> swap-in path it supports, and the transaction budget it fits. This fork runs Unitree S288s on
+> a 6 Mbps half-duplex single bus instead, where none of those three things is true: there is no
+> user EEPROM to assert, no software address assignment, and one frame per joint per tick with
+> the reply doubling as that joint's state. `JETSON.md` § "The seam that already exists" records
+> what each of these became, and `duck-control/src/bus_s288.rs` is the code. The section is left
+> standing rather than rewritten because it is still the *shape* the second implementation was
+> written to — `RobotIo` is what made the swap additive — and because a design doc that keeps
+> its history is cheaper to trust than one quietly edited to describe whatever is fitted today.
+
 A thin layer over `rustypot`: open, one combined `sync_read`, `sync_write` goal positions,
 torque enable, gains, the slow sensor read, and the startup register check. Written fresh
 rather than lifted, but **the numbers are borrowed from the runtime**, each with a comment

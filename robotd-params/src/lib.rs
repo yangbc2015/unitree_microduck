@@ -1643,6 +1643,11 @@ impl Default for PolicyParams {
             standing_action_scale: 1.0,
             // The prototype's `--standing-kp-ratio`.
             standing_gain_ratio: 0.8,
+            // The prototype's gain, in *its* servo's register units. The S288 port takes this
+            // number as already being in S288 units (`bus_s288::set_gain`) and nothing has
+            // measured the two firmwares' gain scales against each other, so this is a
+            // known-unverified starting point rather than a tuned value — see
+            // `bus_s288::Config::kp`, which is where the missing measurement is written down.
             gain: 200,
             head_lowpass: None,
             legs_lowpass: None,
@@ -1651,7 +1656,10 @@ impl Default for PolicyParams {
             ground_pick_gain_ratio: 1.0,
             skills: Vec::new(),
             voltage_adapt: false,
-            nominal_voltage: 7.4,
+            // The 12 V rail. The ratio this is computed against is still clamped to the XL330's
+            // 6.0..9.5 V band — a literal in `robotd/src/main.rs` — so opening `voltage_adapt`
+            // needs that fixed too; see `deploy/robotd.toml` § `[policy]`.
+            nominal_voltage: 12.0,
         }
     }
 }
@@ -1681,8 +1689,16 @@ impl Default for SafetyParams {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields, default)]
 pub struct Bus {
-    /// Serial port the servos and the IMU board share. The Radxa Zero 3W wires them to
-    /// `/dev/ttyS2`.
+    /// Serial port the 15 servos share.
+    ///
+    /// The Radxa Zero 3W wires them to `/dev/ttyS2`. This fork reaches the bus through
+    /// Unitree's AT32 single-bus adapter, which is a USB CDC device, and the default names it by
+    /// its stable `/dev/serial/by-id` path: a `/dev/ttyACM<n>` number depends on enumeration
+    /// order, so a second USB serial device appearing — a debug console, or the IMU if it ever
+    /// moves off I2C — renames the bus out from under the daemon. Which of the adapter's two
+    /// interfaces (`if00`, `if02`) actually carries the single bus is **unverified**; `if00` is
+    /// the conventional data interface, not a measurement. See
+    /// `docs/project/s288-servo-port.md` § Validation.
     pub port: String,
 }
 
@@ -1738,7 +1754,7 @@ pub struct UpdateGate {
 impl Default for Bus {
     fn default() -> Self {
         Self {
-            port: "/dev/ttyS2".into(),
+            port: "/dev/serial/by-id/usb-Artery_AT32_Virtual_Com_Port_3744CBB71974-if00".into(),
         }
     }
 }
@@ -2917,7 +2933,7 @@ mod tests {
         assert!(skill("roulade").chain, "holding the button chains rolls");
         assert!(!skill("kick_left").chain);
         assert!(!p.voltage_adapt, "off by default in the prototype");
-        assert_eq!(p.nominal_voltage, 7.4);
+        assert_eq!(p.nominal_voltage, 12.0);
 
         let name = |p: &Option<std::path::PathBuf>| {
             p.as_ref()

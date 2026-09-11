@@ -13,10 +13,15 @@
 # is far easier to diagnose remotely than a daemon that will not run.
 
 [bus]
-# Serial port the 15 servos and the imu_to_dxl board share. /dev/ttyS2 is the Radxa
-# Zero 3W's wiring; a board wired differently can also be overridden per-invocation with
+# Serial port the 15 servos share. The built-in default is Unitree's AT32 single-bus adapter,
+# addressed by its stable `/dev/serial/by-id` path: a `/dev/ttyACM<n>` number depends on
+# enumeration order, so a second USB serial device appearing — a debug console, or the IMU if
+# it ever moves off I2C — renames the bus out from under the daemon. The adapter exposes **two**
+# interfaces (`if00` and `if02`); which one carries the single bus is *unverified*, and the
+# default is the conventional data interface rather than a measurement. If the chain does not
+# answer, try `if02`. A board wired differently can also be overridden per-invocation with
 # `robotd --port`, which is the dev escape hatch rather than the thing to edit here.
-port = "/dev/ttyS2"
+# port = "/dev/serial/by-id/usb-Artery_AT32_Virtual_Com_Port_3744CBB71974-if00"
 
 # Every value below that is commented out shows the built-in default. LEAVE IT COMMENTED
 # unless this robot genuinely needs a different value: install.sh copies this file to
@@ -167,8 +172,17 @@ mode = "walk"
 # Scale actions with battery voltage: effective scale = action_scale * (nominal / measured
 # EMA, clamped 6.0..9.5 V). The servos' effective kP tracks their supply, so this holds the
 # robot's response steady as the pack sags. Off by default, as in the prototype.
+#
+# Both numbers here belong to the XL330's 2S rail, and on the S288's 12 V rail **neither
+# survives contact**: the clamp would pin every reading at 9.5, so the ratio would sit at its
+# maximum forever, and 7.4 as "nominal" is below the pack's empty floor. `nominal_voltage` is
+# updated below; the clamp is a literal in `robotd/src/main.rs` and has *not* been moved,
+# because guessing a new one is exactly the kind of change that looks right and walks wrong.
+# Turning `voltage_adapt` on requires fixing that clamp first — which is why the default stays
+# `false` until someone re-examines whether effective kP tracks supply the way it did on the
+# XL330 at all. See `JETSON.md` § "The seam that already exists".
 # voltage_adapt = false
-# nominal_voltage = 7.4
+# nominal_voltage = 12.0
 
 [safety]
 # The fall verdict: is the robot down? On projected gravity in the trunk frame — upright

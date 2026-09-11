@@ -14,7 +14,7 @@ they are what says whether a difference is a port or a project.
 | | upstream (Radxa Zero 3W) | this fork (Jetson Orin Nano) | state |
 |---|---|---|---|
 | build | cross-compiled, `cargo zigbuild`, glibc pinned | native aarch64 | done |
-| servos | 15x Dynamixel XL330, Protocol 2.0, `/dev/ttyS2` | 15x Unitree S288, 6 Mbps custom protocol | not ported |
+| servos | 15x Dynamixel XL330, Protocol 2.0, `/dev/ttyS2` | 15x Unitree S288, 6 Mbps custom protocol | code done, unverified on hardware |
 | IMU | `imu_to_dxl` board, read on the servo bus | LSM6DSV16X over I2C | not ported |
 | capture | rkisp, `v4l2src` on `/dev/video0` | Argus, `nvarguscamerasrc` on a CSI port | ported |
 | exposure | `rkaiq_3A_server` plus a software loop | the ISP, which never stops converging | ported |
@@ -542,8 +542,13 @@ buttons "refused" - those two are the route table being consulted, not a robot t
   token and `/etc/robot/hf-token` are untouched: `mediad::turn` says so at every start ("no account
   token, so this robot offers no relay candidates"), and that is the only thing between this board
   and being reachable from off its network.
-- **Servo bus.** `duck-control::RobotIo` is the seam - see `JETSON.md` - and until an impl exists
-  for the S288 protocol, `robotd` retries `/dev/ttyS2` and runs without a body.
+- **Servo bus.** `duck-control::RobotIo` is the seam - see `JETSON.md` - and `bus_s288` now
+  implements it, so `robotd` speaks the S288 chain and waits on it rather than running without a
+  body. What is *not* done is worth stating plainly: the whole implementation has only ever run
+  against a fake transport. `deploy/robotd.toml` names the AT32 adapter by its stable
+  `/dev/serial/by-id` path, but which of that adapter's two CDC interfaces carries the single
+  bus is unverified, and the per-unit zero offsets and signs every joint needs are a bench
+  measurement nobody has taken. `docs/project/s288-servo-port.md` § Validation is the list.
 - **IMU.** Upstream reads it on the servo bus in the same transaction as the joints; the fork's
   LSM6DSV16X is on I2C, so it becomes part of that same `read()` rather than a second source.
 - **Intrinsics.** The mount angle is settled - `deploy/jetson/20-mount.conf` says 0 for this board,

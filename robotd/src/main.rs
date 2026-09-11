@@ -2755,9 +2755,16 @@ async fn control_loop<T: RobotIo>(
         was_driving = driving;
 
         // Voltage adaptation: the servos' effective kP tracks their supply, so scaling the
-        // action by (nominal / measured) holds the robot's response steady as the pack
-        // sags. The EMA is clamped to a plausible band so a bad reading cannot become a
-        // wild scale.
+        // action by (nominal / measured) holds the robot's response steady as the pack sags.
+        // The EMA is clamped to a plausible band so a bad reading cannot become a wild scale.
+        //
+        // **The band is the XL330's 2S rail and did not move with the servo swap.** On the
+        // S288's 12 V rail every reading sits above 9.5, so the clamp would pin the ratio at its
+        // maximum and the feature would do the opposite of its job. Left as a literal rather
+        // than re-guessed because the right band depends on whether effective kP tracks supply
+        // *at all* on this servo — a measurement, not a constant someone picks. `voltage_adapt`
+        // defaults to false so nothing reaches this line today; fixing the band is a
+        // precondition for turning it on, not a follow-up to it.
         let scale_mult = if policy_cfg.voltage_adapt && battery_v > 0.0 {
             policy_cfg.nominal_voltage / battery_v.clamp(6.0, 9.5)
         } else {

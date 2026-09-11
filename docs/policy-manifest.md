@@ -46,7 +46,7 @@ a policy only on a claim that is present and wrong.
 | `obs_len` | int | fetch | `61`; refused if it disagrees with the robot |
 | `action_len` | int | fetch | `14`; refused if it disagrees |
 | `robot.model` | str | fetch | `microduck`; refused if another robot |
-| `robot.hw_rev`, `robot.servos`, `robot.control_hz` | | display | `1`, `xl330`, `50` |
+| `robot.hw_rev`, `robot.servos`, `robot.control_hz` | | display | `1`, `s288`, `50` (upstream's XL330 boards say `xl330`) |
 | `name` | str | skills | what a client asks for; defaults to the file's stem |
 | `description` | str | display | one line, untrusted |
 | `kind` | str | skills, slots | see above |
@@ -75,7 +75,7 @@ a policy only on a claim that is present and wrong.
   "model_api": 1,
   "obs_len": 61,
   "action_len": 14,
-  "robot": { "model": "microduck", "hw_rev": 1, "servos": "xl330", "control_hz": 50 },
+  "robot": { "model": "microduck", "hw_rev": 1, "servos": "s288", "control_hz": 50 },
   "name": "polite-bow",
   "kind": "episodic",
   "duration_s": 4.0,
