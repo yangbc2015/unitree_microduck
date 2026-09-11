@@ -16,7 +16,7 @@
   "backlash": 0.0184,
 
   "q_offset": -0.0285,
-  "armature": null,
+  "armature": 0.0005,
   "kt": null,
   "R": null,
   "load_friction_motor": null,
@@ -36,17 +36,22 @@
     "torsion_stiffness_out": 1600.0,
     "torsion_stiffness_rotor": 0.019,
     "rotor_vs_out_encoder_offset": -0.0285,
-    "backlash_spread": [0.0177, 0.0192]
+    "backlash_spread": [0.0177, 0.0192],
+    "armature_range": [0.0004, 0.0006],
+    "armature_rotor_equiv": 6.1e-09,
+    "kt_implied_by_manual_stall_data": 0.001
   },
 
   "_measurement": {
     "friction": "velocity sweep, kp=0 kd=2, paired +/- to cancel gravity and offset, 9 speeds; plus a pure feedforward torque ramp for stiction",
     "command_delay": "torque step +-0.02 N.m, both below the 0.0365 N.m breakaway so the shaft cannot move; 80 transitions fitted to td + first-order rise",
     "backlash": "each of 3 positions reached from below and from above, 1.8 s settle, |v|=0 at measure time; hysteresis = gap(from below) - gap(from above)",
+    "armature": "torque steps 0.05/0.06/0.07 N.m with kp=kd=0, records truncated at |v| = 1.5 rad/s so F(v) stays inside the range it was fitted over; alpha from quadratic fits over 20-frame windows; taken from the highest-alpha windows (the first window of each step), where the inertial torque is 10x the friction model's residual",
     "torque_source": "the servo's own rotor torque feedback (256000 counts = 1 N.m); it tracked the commanded feedforward to within ~2-6% with a -3 count offset",
     "loop": "6.1-6.4 kHz blocking request/response over USB-CDC; one frame = 0.16 ms",
     "caveats": [
-      "armature is NOT measured. A free-body servo cannot yield it: the reaction torque equals the output torque (20-120 mN.m), which is at or above what the bench can hold and always above the 0.025 N.m needed to move at all, so the housing slips. Both a torque-step and a sine method returned ~5e-4 kg.m^2 — two orders of magnitude below the ~0.1 expected from a 1.2e-6 kg.m^2 rotor reflected through 288:1 — and the torque correlated with velocity (+0.67) but not acceleration (-0.03). Clamp the body and re-run bam_dynamics.py; that number is not a property of the servo.",
+      "armature is joint-space for this assembly (bare shaft + horn), not a per-unit figure: only one S288 was measured.",
+      "armature is 5e-4, i.e. three orders of magnitude below what a 1.2e-6 kg.m^2 rotor would reflect to through 288:1. That estimate rested on an unmeasured guess. Holding the body still by hand changed nothing (4.0e-4 vs 4.7e-4, within the window spread), so a housing reaction was never in the path; the manual's own stall figures (0.32 A -> 3.4e-4 N.m rotor) imply kt ~1e-3 N.m/A, a high-speed low-torque motor, which is what a 6e-9 kg.m^2 rotor looks like. Note the sine method cannot see a J this small: at 0.25 rad and 0.5 Hz the inertial torque is 0.8 mN.m against 35-40 mN.m of residual, so the regression is dominated by model error correlated with alpha, not by noise.",
       "backlash of 0.0184 rad (1.056 deg, repeatability 0.014 deg) is measured between the rotor-derived output angle and the output-side encoder. It contradicts the statement that the output encoder removes the need for a backlash model.",
       "q_offset here is the measured constant offset between the two encoders of this unit (-1.63 deg, varying 0.4 deg with position, which includes the 13-bit output encoder's own non-linearity) — not an absolute joint zero.",
       "no voltage sensitivity (only a 12 V supply) and no current-limit / peak torque measurement (no weights or stall rig). Temperature drift over 55-60 C was within +/-0.002 N.m."

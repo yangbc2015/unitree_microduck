@@ -120,14 +120,19 @@ for key, src in (("friction_base", F["Fc"]), ("friction_stribeck", F["Fs"]),
                  ("alpha", F["alpha"])):
     check(f"{key} agrees with bam_dynamics.FRICTION", abs(j[key] - src) < 1e-4,
           f"{j[key]} vs {src}")
-check("armature is null, not a free-body number",
-      j["armature"] is None, f"armature={j['armature']}")
+check("armature is a measured joint-space value, not a rotated guess",
+      j["armature"] is not None and j["_robust"]["armature_range"][0] <= j["armature"]
+      <= j["_robust"]["armature_range"][1],
+      f"armature={j['armature']}, rotor equiv {j['_robust']['armature_rotor_equiv']:.1e}")
+check("the caveat that used to say 'not measured' is gone",
+      not any("NOT measured" in c for c in j["_measurement"]["caveats"]))
 check("breakaway in json == bam_fit.STICTION", j["_robust"]["breakaway_torque"] == bf.STICTION,
       f"{j['_robust']['breakaway_torque']} vs {bf.STICTION}")
 check("backlash present as a radian value", abs(j["backlash"] - 0.0184) < 1e-9,
       f"{j['backlash']} rad = {math.degrees(j['backlash']):.3f} deg")
-check("caveats list mentions the clamp requirement",
-      any("clamp" in c.lower() for c in j["_measurement"]["caveats"]))
+check("the armature caveat records the refuted clamp hypothesis",
+      any("changed nothing" in c for c in j["_measurement"]["caveats"]),
+      "so nobody re-runs the clamp experiment expecting a different answer")
 
 print("== third-party material stays out of the repo ==")
 # paths are relative to FOLDER, which is where the .gitignore being tested lives

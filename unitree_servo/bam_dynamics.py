@@ -507,17 +507,20 @@ def cmd_sine(m, a):
 
 def cmd_inertia(m, a):
     """Torque step, kp=kd=0. The shaft breaks away and accelerates at alpha = (tau -
-    F(v))/J, so J falls out once F(v) is known. Several torques, several windows."""
+    F(v))/J, so J falls out once F(v) is known. Several torques, several windows.
+
+    `--vmax` matters: F(v) was fitted over 0.02-1.5 rad/s, and a torque step runs far past
+    that within milliseconds (0.12 N.m reaches 13 rad/s inside the record). Windows above
+    vmax are skipped, because there J is being computed from an extrapolated friction."""
     log = Log(f"M6b_inertia_id{a.id}")
     log.header(["tau_cmd_out", "window", "v_out", "tor_rep_out", "alpha", "J_out",
                 "J_rotor", "n_frames"])
     taus = [float(x) for x in a.taus.split(",")]
     fb = m.frame(a.id, 0, 0, 0.0, 0.0, 0.0, 0.0, 0.0)[2]
     p_ref = out_pos(fb)
-    print(f"inertia: torque steps {taus} N.m (output side) from a settled, unwound state.")
-    print("!! the shaft accelerates for the whole step -- nothing may be on the horn")
-    print("!! the servo body must be RESTRAINED (clamp / hand): with the body free the")
-    print("   reaction torque spins the housing instead, and J comes out much too small\n")
+    print(f"inertia: torque steps {taus} N.m (output side) from a settled, unwound state; "
+          f"windows above v={a.vmax} rad/s are discarded (outside the friction fit)")
+    print("!! the shaft accelerates during each step -- nothing may be on the horn")
     est = []
     for tau in taus:
         settle(m, a.id, p_ref)
@@ -533,7 +536,8 @@ def cmd_inertia(m, a):
                 p0 = d["pos_raw"]
             d["t"] = t1
             rec.append(d)
-            if abs((d["pos_raw"] - p0) / POS_COUNTS_PER_ROT_RAD / RATIO) > a.limit:
+            if abs(d["spd_out"]) > a.vmax or \
+               abs((d["pos_raw"] - p0) / POS_COUNTS_PER_ROT_RAD / RATIO) > a.limit:
                 break
         if len(rec) < a.win * 2:
             print(f"  tau={tau:+.4f}: too few frames ({len(rec)}), skipped")
@@ -544,7 +548,9 @@ def cmd_inertia(m, a):
         if k0 >= len(rec) - a.win - 1:
             print(f"  tau={tau:+.4f}: never broke away, raise the torque")
             continue
-        print(f"  tau={tau:+.4f} Nm: motion from frame {k0}, {len(rec)} frames recorded")
+        print(f"  tau={tau:+.4f} Nm: motion from frame {k0}, {len(rec)} frames "
+              f"({(rec[-1]['t']-rec[0]['t'])*1e3:.0f} ms, |v| <= {a.vmax})")
+
         js = []
         for s in range(k0, len(rec) - a.win, a.win):
             w = rec[s:s + a.win]
@@ -618,6 +624,8 @@ def main():
     ap.add_argument("--freq", type=float, default=0.5)
     ap.add_argument("--secs", type=float, default=0.25)
     ap.add_argument("--win", type=int, default=120, help="frames per acceleration fit")
+    ap.add_argument("--vmax", type=float, default=1.5,
+                    help="discard windows above this speed (rad/s) -- the friction fit's range")
     ap.add_argument("--limit", type=float, default=2.0, help="abort a step past this, rad")
     a = ap.parse_args()
 
