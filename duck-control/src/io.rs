@@ -221,7 +221,12 @@ impl FakeIo {
             last_gain: None,
             imu_ready: true,
             slow: Some(SlowSensors {
-                volts: 7.4,
+                // Mid-pack on the rail this robot runs. It used to be 7.4 V, the midpoint of the
+                // 2S XL330 pack; the span lives in `model` and has moved to the 3S one, so a
+                // fake still reporting 7.4 would map to 0% through `battery_percent` and make
+                // `--fake` look like a flat robot — including in the one integration test that
+                // checks volts→percent end to end.
+                volts: 11.25,
                 temps_c: [32.0; NUM_JOINTS],
             }),
             track_targets: true,

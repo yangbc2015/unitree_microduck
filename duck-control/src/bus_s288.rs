@@ -450,6 +450,37 @@ impl Default for Config {
     }
 }
 
+/// Every address a duck occupies, in [`crate::model::JOINT_NAMES`] order.
+///
+/// The robot's addresses rather than a bus instance's, for the one caller that needs them
+/// before it has a handle: `robot.rebootMotors` with no names means "all of them". It reads
+/// [`Config`]'s default rather than keeping a second table, so the two cannot drift apart; if
+/// the robot ever learns to read its addresses from configuration, this becomes a method on
+/// the live bus and this function goes away.
+pub fn all_ids() -> [u8; NUM_JOINTS] {
+    Config::default().ids
+}
+
+impl BusS288<SerialTransport> {
+    /// Open the port and build the bus a duck runs.
+    ///
+    /// Nothing is verified here, and that is deliberate: opening a tty says nothing about
+    /// whether anything is on the other end of it, and a chain that has not been powered yet
+    /// must not look like a broken port. `robotd` waits for power rather than giving up, and
+    /// its retry loop needs "could not open" and "nothing answered" to be different answers
+    /// (the first is a wiring or device problem, the second is a switch). [`Self::verify_chain`]
+    /// is the second half.
+    pub fn open(port: &str) -> Result<Self> {
+        let cfg = Config::default();
+        let transport =
+            SerialTransport::open(port, cfg.read_timeout).map_err(|e| IoError::Port {
+                path: port.to_owned(),
+                source: e,
+            })?;
+        Self::with_transport(transport, cfg)
+    }
+}
+
 // --------------------------------------------------------------------------- IMU seam
 
 /// Where `Sensors.imu` comes from, since it is not on this bus.
@@ -547,6 +578,83 @@ impl<T: Transport> BusS288<T> {
 
     pub fn health(&self) -> BusHealth {
         self.health
+    }
+
+    /// The servo addresses this bus is talking to, in [`crate::model::JOINT_NAMES`] order.
+    pub fn ids(&self) -> &[u8; NUM_JOINTS] {
+        &self.cfg.ids
+    }
+
+    /// Every servo answered. This is the S288's answer to the XL330's `check_registers`, and
+    /// the two are deliberately not the same shape.
+    ///
+    /// `check_registers` asserts EEPROM values, because an XL330 ships with a `return_delay_time`
+    /// that quietly eats bus budget and a `shutdown` mask that quietly latches. The S288 exposes
+    /// no user EEPROM — there is nothing to assert and nothing a factory reset could have
+    /// changed — so a boot verifies the one thing the wire *can* say: that the whole chain is
+    /// there. One pass tells it, because each frame's reply is that joint's state, so fifteen
+    /// answers is a complete census. A short chain fails here, loudly, instead of waking up as a
+    /// robot with a dead leg.
+    ///
+    /// **Torque is off at this point and this cannot move the robot**: nothing enables torque
+    /// before a human asks, and a frame with zero gains and no feedforward holds no current
+    /// (see [`BusS288::exchange_joint`]). A boot check that twitched the robot would be worse
+    /// than no check at all.
+    ///
+    /// A latched `MError` is *reported, not fatal*: a servo with a fault still answers frames,
+    /// and the way out of it is `robot.rebootMotors`, which clears the control bits. Failing
+    /// here would turn "one servo has a latched fault" into "the robot never comes up", since
+    /// the caller's response to a failure is to wait and try again.
+    pub fn verify_chain(&mut self) -> Result<()> {
+        self.pass()?;
+        if self.health.errors > 0 {
+            tracing::warn!(
+                errors = self.health.errors,
+                joints = NUM_JOINTS,
+                "servos answered with MError set; the chain is up, but a latched fault holds \
+                 torque off until `robot.rebootMotors` clears it"
+            );
+        }
+        Ok(())
+    }
+
+    /// Present positions only — the lighter read `robotd init` uses to learn the pose the robot
+    /// is already in before it ramps anywhere. Joint-side radians with [`Config::sign`] and
+    /// [`Config::offset_rad`] applied, i.e. the same units [`RobotIo::read`] reports and
+    /// [`Self::interpolate_to`] consumes.
+    pub fn present_positions(&mut self) -> Result<[f64; NUM_JOINTS]> {
+        self.pass()?;
+        Ok(self.sample.positions)
+    }
+
+    /// Ramp every joint from where it is now to `target`, linearly.
+    ///
+    /// Only ever called by an explicit `init` — the control loop must never move the robot on
+    /// its own, because that would make an update restart a fall risk. Blocking, and
+    /// deliberately so: nothing else should be talking to the bus while this runs.
+    ///
+    /// Each step is a full pass, so a ramp is `steps` × 15 frames at ~0.17 ms each. That is the
+    /// price of a bus with no broadcast write, and it is paid once per `init`, not per tick.
+    pub fn interpolate_to(
+        &mut self,
+        target: &[f64; NUM_JOINTS],
+        duration: Duration,
+        step: Duration,
+    ) -> Result<()> {
+        let start = self.present_positions()?;
+        let steps = (duration.as_secs_f64() / step.as_secs_f64())
+            .ceil()
+            .max(1.0) as u32;
+        for i in 1..=steps {
+            let t = i as f64 / steps as f64;
+            let mut next = [0.0; NUM_JOINTS];
+            for j in 0..NUM_JOINTS {
+                next[j] = start[j] + (target[j] - start[j]) * t;
+            }
+            self.write(&JointTargets::new(next))?;
+            std::thread::sleep(step);
+        }
+        Ok(())
     }
 
     fn check_config(cfg: &Config) -> Result<()> {

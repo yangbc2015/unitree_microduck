@@ -1026,9 +1026,9 @@ async fn main() -> ExitCode {
 /// Enable torque and ramp to the home pose.
 #[cfg(target_os = "linux")]
 fn run_init(params: &Params, duration: Duration) -> ExitCode {
-    // The same open as the daemon's, replacement adoption included: `init` is what someone
-    // reaches for right after a motor swap, and it must not be the one path that refuses the
-    // new servo.
+    // The same open as the daemon's, startup check included: `init` is what someone reaches
+    // for right after a motor swap, and it must not be the one path that refuses to bring the
+    // robot up.
     let Some(mut io) = open_bus(&params.bus.port, 0) else {
         return ExitCode::FAILURE;
     };
@@ -1134,12 +1134,12 @@ fn spawn_control_thread(
                 return;
             }
 
-            // Waiting, not one shot. `open_bus` verifies motor registers, which means it
-            // talks to the servos — so on an unpowered board it fails and this used to fall
-            // straight off the end of the thread. No control loop was ever created, and
-            // because nothing had been *attempted* the health reason was the bland "control
-            // loop has not completed a cycle yet", forever, whatever happened to the robot
-            // afterwards. Retrying the read alone was not enough: execution never got there.
+            // Waiting, not one shot. `open_bus` talks to the servos — so on an unpowered chain
+            // it fails, and this used to fall straight off the end of the thread. No control
+            // loop was ever created, and because nothing had been *attempted* the health reason
+            // was the bland "control loop has not completed a cycle yet", forever, whatever
+            // happened to the robot afterwards. Retrying the read alone was not enough:
+            // execution never got there.
             runtime.block_on(async move {
                 if let Some(io) = open_bus_waiting(&port, &state).await {
                     control_loop(io, state, intents, params, params_path, period, poweroff).await;
@@ -1149,16 +1149,26 @@ fn spawn_control_thread(
 }
 
 /// The real bus on the board; a fake elsewhere, so `open_bus_waiting` has one signature.
+///
+/// **This alias is the whole of the port's core patch.** Upstream it names
+/// `duck_control::bus::DynamixelIo`; the robot in this fork has Unitree S288s on the bus, so it
+/// names the second `RobotIo` implementation instead, and everything downstream of the trait —
+/// the control loop, the safety arbiter, policy loading, the IPC protocol — is untouched. That
+/// is what `duck-control/src/io.rs` was built to be.
+///
+/// A plain edit rather than a `cfg`/feature switch, deliberately: this fork exists to run one
+/// robot, the Dynamixel implementation still compiles (both modules are in `duck-control`'s
+/// build, so neither bit-rots), and the choice is one line to reverse. Recorded in `JETSON.md`.
 #[cfg(target_os = "linux")]
-type BusIo = duck_control::bus::DynamixelIo;
+type BusIo = duck_control::bus_s288::BusS288<duck_control::bus_s288::SerialTransport>;
 #[cfg(not(target_os = "linux"))]
 type BusIo = FakeIo;
 
 /// Open and verify the bus, waiting for a robot to answer.
 ///
-/// Same reasoning as [`adopt_startup_pose`], one step earlier: an unpowered board cannot
-/// pass `check_registers`, and that is a condition someone fixes by flipping a switch, not
-/// one to abandon the control loop over.
+/// Same reasoning as [`adopt_startup_pose`], one step earlier: an unpowered chain cannot pass
+/// `bus_s288::verify_chain`, and that is a condition someone fixes by flipping a switch, not one
+/// to abandon the control loop over.
 ///
 /// Returns `None` only if shutdown is requested while waiting.
 async fn open_bus_waiting(port: &str, state: &RobotState) -> Option<BusIo> {
@@ -1186,12 +1196,27 @@ async fn open_bus_waiting(port: &str, state: &RobotState) -> Option<BusIo> {
 }
 
 /// Open and verify the bus, or explain why not.
+///
+/// The startup check is a *census*, not a register assert. An XL330 needs its EEPROM verified —
+/// a factory-fresh one answers with a `return_delay_time` that quietly eats 40% of the tick
+/// budget, and the old path here corrected that on every boot. The S288 has no user EEPROM at
+/// all, so the honest equivalent is the one thing the wire can still be asked: does every joint
+/// on the chain answer? One pass proves it, because each frame's reply *is* that joint's state.
+///
+/// **`adopt_missing_servo` has no counterpart here and is gone rather than stubbed.** Its whole
+/// mechanism was that a fresh XL330 announces itself — ID 1 at 57 600 baud, neither of which any
+/// joint uses — and can then be re-addressed from software. An S288's address is set through
+/// Unitree's Windows GUI, the protocol documents no set-ID command, and all fifteen of the bus's
+/// addresses are already taken by joints, so "find the new servo and flash it" is not a smaller
+/// feature on this hardware: it is an absent one. What replaces it is a person assigning the
+/// address before the servo goes on the robot. What does *not* change is the waiting behaviour,
+/// which is what a swapped-and-not-yet-powered chain needs either way.
 #[cfg(target_os = "linux")]
 fn open_bus(port: &str, attempt: u32) -> Option<BusIo> {
     // First attempt and every thirtieth — about one line per 30 s while waiting.
     let loud = attempt == 0 || attempt.is_multiple_of(STARTUP_READ_LOG_EVERY);
 
-    let mut io = match duck_control::bus::DynamixelIo::open(port) {
+    let mut io = match BusIo::open(port) {
         Ok(io) => io,
         Err(e) => {
             if loud {
@@ -1200,85 +1225,23 @@ fn open_bus(port: &str, attempt: u32) -> Option<BusIo> {
             return None;
         }
     };
-    if !adopt_missing_servo(&mut io, loud) {
-        return None;
-    }
-    match io.check_registers() {
-        Ok(0) => tracing::info!("motor registers already correct"),
-        Ok(n) => tracing::warn!(corrected = n, "motor registers corrected"),
+    match io.verify_chain() {
+        Ok(()) => tracing::info!(
+            joints = duck_control::NUM_JOINTS,
+            "every servo on the chain answered"
+        ),
         Err(e) => {
             if loud {
                 tracing::error!(
                     error = %e,
                     attempt,
-                    "motor register check failed; waiting, is servo power on?"
+                    "the servo chain did not answer; waiting, is servo power on?"
                 );
             }
             return None;
         }
     }
     Some(io)
-}
-
-/// The motor-swap path: if exactly one expected servo is silent and a factory-fresh one
-/// answers instead, flash the new one as the missing joint.
-///
-/// A ping census of the fifteen expected IDs is all a complete bus pays for this. The
-/// factory-defaults probe — which reopens the port at 57 600 baud — only runs once a single
-/// servo is known to be missing, so an ordinary boot never scans for anything.
-///
-/// Returns whether the bus is worth checking further. `false` is "keep waiting": every servo
-/// unpowered, a servo missing with nothing fresh to replace it, or two missing at once, which
-/// cannot be told apart and is left to a human.
-#[cfg(target_os = "linux")]
-fn adopt_missing_servo(io: &mut BusIo, loud: bool) -> bool {
-    use duck_control::bus::replacement_target;
-
-    let missing = match io.missing_servos() {
-        Ok(missing) => missing,
-        Err(e) => {
-            if loud {
-                tracing::error!(error = %e, "cannot ping the servos; waiting, is servo power on?");
-            }
-            return false;
-        }
-    };
-    if missing.is_empty() {
-        return true;
-    }
-    if missing.len() == duck_control::NUM_JOINTS {
-        // Not a swap, just no power yet; `check_registers` below says so in the words people
-        // already know.
-        return true;
-    }
-    let Some(id) = replacement_target(&missing) else {
-        if loud {
-            tracing::error!(
-                ?missing,
-                "several servos are missing; a replacement can only be adopted one at a time, waiting"
-            );
-        }
-        return false;
-    };
-    match io.adopt_replacement(id) {
-        Ok(true) => true,
-        Ok(false) => {
-            if loud {
-                tracing::error!(
-                    id,
-                    "servo missing and nothing answers at factory defaults (id 1, 57600 baud); \
-                     is it plugged in? waiting"
-                );
-            }
-            false
-        }
-        Err(e) => {
-            if loud {
-                tracing::error!(error = %e, id, "adopting the replacement servo failed; waiting");
-            }
-            false
-        }
-    }
 }
 
 #[cfg(not(target_os = "linux"))]
@@ -1345,7 +1308,7 @@ enum Bringup {
 impl Bringup {
     /// The interpolated target for this tick, or `None` once the ramp is done.
     ///
-    /// Linear, like `DynamixelIo::interpolate_to` which `robotd init` uses — same shape, except this
+    /// Linear, like `BusIo::interpolate_to` which `robotd init` uses — same shape, except this
     /// one is computed per tick instead of blocking the thread, because here the loop is running.
     fn homing_target(&self, now: Instant) -> Option<[f64; NUM_JOINTS]> {
         let Bringup::Homing { from, since } = self else {
@@ -2074,16 +2037,23 @@ async fn control_loop<T: RobotIo>(
             None => {}
         }
 
-        // `robot.rebootMotors`: torque off everywhere, then REBOOT the named servos (every servo
-        // when none are named). The rebooted servos are off the bus for a few hundred milliseconds
-        // — the reads fail and the loop coasts through it — and come back with torque off and
-        // EEPROM gains; the forgotten gain cache makes the next write restore the gains, and the
-        // robot is back at limp, so the next `init` or Start brings it up like a fresh boot. Torque
-        // off first on purpose: a tripped servo is usually a leg, and a robot standing on the other
-        // leg while one reboots is not a robot to leave standing.
+        // `robot.rebootMotors`: torque off everywhere, then clear the named servos' latched
+        // faults (every servo when none are named). Torque off first on purpose: a tripped servo
+        // is usually a leg, and a robot standing on the other leg while one is being cleared is
+        // not a robot to leave standing.
+        //
+        // What "reboot" *means* changed with the servo. An XL330 has a REBOOT instruction, so it
+        // genuinely restarts and comes back with torque off and its gains reset to EEPROM values
+        // — which is why the old note here talked about a forgotten gain cache. The S288 has no
+        // such instruction: `bus_s288`'s `reboot` stops the servo and re-arms closed loop, which
+        // the manual documents as clearing a latched `MError`, and it reports honestly when the
+        // fault survives (an encoder-class one cannot be cleared in software at all). Gains are
+        // not in play either way — they ride on every frame rather than living in a register — so
+        // the robot lands in the same place: limp, with the next `init` or Start bringing it up
+        // like a fresh boot.
         if let Some(ids) = intents.take_reboot_motors() {
             let ids: Vec<u8> = if ids.is_empty() {
-                duck_control::model::JOINT_IDS.to_vec()
+                duck_control::bus_s288::all_ids().to_vec()
             } else {
                 ids
             };

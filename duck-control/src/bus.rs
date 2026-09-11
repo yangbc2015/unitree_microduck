@@ -10,7 +10,7 @@
 //!
 //! Written against `rustypot`, but the *numbers* — conversion factors and the EEPROM
 //! registers asserted at startup — come from `microduck_runtime`, where they were arrived
-//! at against real hardware. See [`crate::model`].
+//! at against real hardware.
 
 use std::f64::consts::PI;
 use std::time::Duration;
@@ -19,10 +19,52 @@ use rustypot::servo::dynamixel::xl330::Xl330Controller;
 
 use crate::imu::{IMU_BLOCK_LEN, SflpDecoder};
 use crate::io::{ImuStale, IoError, JointTargets, Result, RobotIo, Sensors, SlowSensors};
-use crate::model::{
-    BAUD_RATE, EXPECTED_REGISTERS, FACTORY_BAUD_RATE, FACTORY_ID, IMU_DXL_ID, JOINT_IDS,
-    JOINT_NAMES, NUM_JOINTS,
-};
+use crate::model::{JOINT_NAMES, NUM_JOINTS};
+
+// ── this bus's own numbers ───────────────────────────────────────────────────
+//
+// Everything below is a property of *this* hardware — the XL330 chain and the `imu_to_dxl`
+// board — and not of the robot. They used to live in `crate::model`, which was honest while
+// there was one bus; the S288 port (`crate::bus_s288`) shares the mechanics, the joint names
+// and the battery envelope with this robot and none of these, so they belong next to the code
+// that speaks them. Keeping them in `model` would have meant either a second copy of the
+// frame's assumptions or a `model` that is only correct for one of two fitted robots.
+
+/// Dynamixel IDs, indexed as [`JOINT_NAMES`].
+pub const JOINT_IDS: [u8; NUM_JOINTS] = [
+    20, 21, 22, 23, 24, // left leg
+    30, 31, 32, 33, 34, // neck, head, mouth
+    10, 11, 12, 13, 14, // right leg
+];
+
+/// The `imu_to_dxl` v2 board's Dynamixel ID. It rides the motor bus and is read in the
+/// same transaction as the servos.
+pub const IMU_DXL_ID: u8 = 200;
+
+pub const BAUD_RATE: u32 = 1_000_000;
+
+/// What a servo answers as out of the box: ID 1 at 57 600 baud. Both are deliberately unused
+/// on this bus — no joint is ID 1 and nothing runs at that speed — which is what lets a
+/// replacement be told apart from every servo already fitted ([`DynamixelIo::adopt_replacement`]).
+pub const FACTORY_ID: u8 = 1;
+pub const FACTORY_BAUD_RATE: u32 = 57_600;
+
+/// EEPROM registers asserted (and corrected) at startup.
+///
+/// `return_delay_time` is the load-bearing one: the XL330 ships at 250, which is 500 µs of
+/// turnaround *per device*. Across 16 devices that is 8 ms per tick — 40% of a 20 ms budget
+/// — spent waiting for servos to get around to answering. The rest are here because the
+/// runtime found them worth pinning; `shutdown = 52` is the error mask that latches on
+/// overload, overheating and input-voltage faults.
+///
+/// Nothing here has an S288 counterpart: that servo exposes no user EEPROM at all, so its
+/// startup check is a chain census rather than a register assert (`bus_s288::verify_chain`).
+pub const EXPECTED_REGISTERS: &[(&str, u8)] = &[
+    ("return_delay_time", 0),
+    ("baud_rate", 3), // 3 = 1 Mbps, must agree with BAUD_RATE
+    ("pwm_slope", 255),
+    ("shutdown", 52),
+];
 
 /// Start of the contiguous block read every tick: `present_pwm`, `present_current`,
 /// `present_velocity`, `present_position`. Twelve bytes covers all four, and happens to be
@@ -596,6 +638,41 @@ impl RobotIo for DynamixelIo {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The ID table is indexed by the same integer as `model`'s names and home pose. The
+    /// three have to agree in length or every lookup silently reads the wrong joint.
+    #[test]
+    fn the_id_table_matches_the_joint_tables() {
+        assert_eq!(JOINT_IDS.len(), NUM_JOINTS);
+        assert_eq!(JOINT_IDS.len(), JOINT_NAMES.len());
+    }
+
+    /// A duplicated Dynamixel ID makes a `sync_read` return blocks that cannot be matched
+    /// back to joints, and a `sync_write` command two joints at once. Both fail in ways
+    /// that look like a wiring fault.
+    #[test]
+    fn ids_are_unique() {
+        let mut seen = JOINT_IDS;
+        seen.sort_unstable();
+        seen.windows(2)
+            .for_each(|w| assert_ne!(w[0], w[1], "duplicate Dynamixel ID {}", w[0]));
+    }
+
+    /// The IMU board shares the bus with the servos, so its ID must not collide with one.
+    #[test]
+    fn imu_id_does_not_collide_with_a_joint() {
+        assert!(!JOINT_IDS.contains(&IMU_DXL_ID));
+    }
+
+    /// The replacement path finds a new servo by the ID it ships with. If a joint ever took
+    /// ID 1, a fresh servo would be indistinguishable from it — and flashing "the missing
+    /// joint" onto ID 1 would re-address a servo that was never missing.
+    #[test]
+    fn factory_defaults_are_unused_on_the_bus() {
+        assert!(!JOINT_IDS.contains(&FACTORY_ID));
+        assert_ne!(IMU_DXL_ID, FACTORY_ID);
+        assert_ne!(FACTORY_BAUD_RATE, BAUD_RATE);
+    }
 
     /// One silent servo is the only case a swap can be inferred from. With two silent there is
     /// no telling which the fresh servo replaces, and guessing would flash a leg joint as a neck

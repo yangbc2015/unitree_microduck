@@ -7,16 +7,17 @@
 //! The numeric values here are lifted from `microduck_runtime`'s `motor.rs`, where they
 //! were measured against hardware rather than derived. Re-deriving them from a datasheet
 //! is exactly the kind of change that looks right and walks wrong.
+//!
+//! What lives here is what survives a change of servo: how many joints there are, what they
+//! are called, where home is, how far the mouth opens, and how flat the pack is. Everything
+//! that is a property of a particular *bus* — the addresses, the baud rate, the EEPROM
+//! registers, where the IMU is read — lives with the code that speaks it ([`crate::bus`] for
+//! the XL330 chain, [`crate::bus_s288`] for the S288). That split is what lets both
+//! implementations compile side by side, and it is why swapping fifteen servos for fifteen
+//! others changed so little of this file.
 
 /// Left leg (5) · neck/head/mouth (5) · right leg (5).
 pub const NUM_JOINTS: usize = 15;
-
-/// Dynamixel IDs, indexed as [`JOINT_NAMES`].
-pub const JOINT_IDS: [u8; NUM_JOINTS] = [
-    20, 21, 22, 23, 24, // left leg
-    30, 31, 32, 33, 34, // neck, head, mouth
-    10, 11, 12, 13, 14, // right leg
-];
 
 /// Joint names, from the protocol crate — the wire indexes `joints` and `targets`
 /// positionally, so that order and this one cannot be allowed to drift apart. The
@@ -36,6 +37,11 @@ pub const MOUTH_INDEX: usize = 9;
 /// Must match `HOME_FRAME` in the training env — a policy is trained against these angles
 /// and observes joint positions *relative* to them, so a discrepancy here is a constant
 /// offset on 14 observation slots.
+///
+/// The servo swap does not change these *angles*, but it does put a new question in front of
+/// them: they are joint-side radians, and each S288's output zero is wherever its horn happens
+/// to have been pressed on. That offset is per unit and lives in `bus_s288::Config`, measured
+/// on the bench — not here, because it is not a property of the robot model.
 pub const DEFAULT_POSITION: [f64; NUM_JOINTS] = [
     0.0,     // left_hip_yaw
     -0.0873, // left_hip_roll
@@ -59,6 +65,10 @@ pub const DEFAULT_POSITION: [f64; NUM_JOINTS] = [
 ///
 /// The mouth is not part of any policy — every alpha network is 14 actions with this joint
 /// skipped — so these two numbers and [`mouth_target`] are the whole of mouth control.
+///
+/// It is also, per `s288-servo-port.md`, the one joint whose mechanical sense under the new
+/// servo nobody has confirmed: whether the S288 can reach −5°..+30° from its own zero, and
+/// which way round, is a bench check rather than a computation.
 pub const MOUTH_CLOSED: f64 = -5.0 * std::f64::consts::PI / 180.0;
 pub const MOUTH_OPEN: f64 = 30.0 * std::f64::consts::PI / 180.0;
 
@@ -73,32 +83,6 @@ pub fn mouth_target(open: f64) -> f64 {
     MOUTH_CLOSED + open * (MOUTH_OPEN - MOUTH_CLOSED)
 }
 
-/// The `imu_to_dxl` v2 board's Dynamixel ID. It rides the motor bus and is read in the
-/// same transaction as the servos ([`crate::bus`]).
-pub const IMU_DXL_ID: u8 = 200;
-
-pub const BAUD_RATE: u32 = 1_000_000;
-
-/// What a servo answers as out of the box: ID 1 at 57 600 baud. Both are deliberately unused
-/// on this bus — no joint is ID 1 and nothing runs at that speed — which is what lets a
-/// replacement be told apart from every servo already fitted ([`crate::bus`]).
-pub const FACTORY_ID: u8 = 1;
-pub const FACTORY_BAUD_RATE: u32 = 57_600;
-
-/// EEPROM registers asserted (and corrected) at startup.
-///
-/// `return_delay_time` is the load-bearing one: the XL330 ships at 250, which is 500 µs of
-/// turnaround *per device*. Across 16 devices that is 8 ms per tick — 40% of a 20 ms budget
-/// — spent waiting for servos to get around to answering. The rest are here because the
-/// runtime found them worth pinning; `shutdown = 52` is the error mask that latches on
-/// overload, overheating and input-voltage faults.
-pub const EXPECTED_REGISTERS: &[(&str, u8)] = &[
-    ("return_delay_time", 0),
-    ("baud_rate", 3), // 3 = 1 Mbps, must agree with BAUD_RATE
-    ("pwm_slope", 255),
-    ("shutdown", 52),
-];
-
 /// Index of a joint by name. Linear scan over 15 entries, used at startup and in tests.
 pub fn joint_index(name: &str) -> Option<usize> {
     JOINT_NAMES.iter().position(|n| *n == name)
@@ -107,16 +91,32 @@ pub fn joint_index(name: &str) -> Option<usize> {
 // ── battery ──────────────────────────────────────────────────────────────────
 //
 // There is no fuel gauge and no ADC. The only measurement available is what the servos
-// report as their own supply (`crate::bus::DynamixelIo::bus_voltage`), which is the pack
-// seen through the bus — so it sags under load and recovers when the robot stands still.
-// That is why the span below is *usable-under-load*, not the cell chemistry's range.
+// report as their own supply (`crate::bus::DynamixelIo::slow_sensors`, or
+// `crate::bus_s288::BusS288::slow_sensors`), which is the pack seen through the bus — so it
+// sags under load and recovers when the robot stands still. That is why the span below is
+// *usable-under-load*, not the cell chemistry's range.
+//
+// **These two numbers changed with the servo swap and have not been measured on a robot
+// yet.** The XL330 duck ran a 2S NP-F550; the S288 duck runs a 3S pack on its 12 V rail, and
+// the pair below is the 3S chemistry's usable span rather than a run-flat measurement. The
+// method that produced the old pair — `microduck_runtime`'s `check_battery`: run a duck flat
+// and watch where it starts struggling — is the method that should replace these. Until
+// someone does that, treat them as an envelope, not a measurement: a wrong empty floor either
+// shuts a healthy robot down or never shuts a dying one down.
+//
+// One more thing the S288 makes explicit and the XL330 did not: its frame reports supply as
+// **0.5 V per count** (see `bus_s288`'s feedback parser), so every reading is quantised to
+// half a volt. Across the 2.7 V span below that is five or six distinct percentages, and no
+// arithmetic in this file will add resolution the bus does not carry. `battery_percent` is
+// therefore a coarse indicator on this hardware; anything finer needs an ADC the duck does
+// not have.
 
-/// Off a full charge, under load. NP-F550, 2S Li-ion.
-pub const BATTERY_FULL_V: f64 = 8.2;
+/// Off a full charge, under load. 3S Li-ion on the 12 V rail.
+pub const BATTERY_FULL_V: f64 = 12.6;
 
 /// The sag floor: below this the robot starts struggling, well before the pack's own
 /// protection trips. Empty for our purposes, not empty for the cells'.
-pub const BATTERY_EMPTY_V: f64 = 6.6;
+pub const BATTERY_EMPTY_V: f64 = 9.9;
 
 /// Fraction of a pack, 0–100, for a bus voltage.
 ///
@@ -138,40 +138,13 @@ pub fn battery_percent(volts: f64) -> f64 {
 mod tests {
     use super::*;
 
-    /// The three tables are indexed by the same integer everywhere in the crate. If they
-    /// ever diverge in length, every lookup silently reads the wrong joint.
+    /// The tables are indexed by the same integer everywhere in the crate. If they ever
+    /// diverge in length, every lookup silently reads the wrong joint. (`JOINT_IDS` is not in
+    /// this list any more: it is a bus's table now, and `bus` asserts it against this one.)
     #[test]
     fn tables_agree_on_length() {
-        assert_eq!(JOINT_IDS.len(), NUM_JOINTS);
         assert_eq!(JOINT_NAMES.len(), NUM_JOINTS);
         assert_eq!(DEFAULT_POSITION.len(), NUM_JOINTS);
-    }
-
-    /// A duplicated Dynamixel ID makes a `sync_read` return blocks that cannot be matched
-    /// back to joints, and a `sync_write` command two joints at once. Both fail in ways
-    /// that look like a wiring fault.
-    #[test]
-    fn ids_are_unique() {
-        let mut seen = JOINT_IDS;
-        seen.sort_unstable();
-        seen.windows(2)
-            .for_each(|w| assert_ne!(w[0], w[1], "duplicate Dynamixel ID {}", w[0]));
-    }
-
-    /// The IMU board shares the bus with the servos, so its ID must not collide with one.
-    #[test]
-    fn imu_id_does_not_collide_with_a_joint() {
-        assert!(!JOINT_IDS.contains(&IMU_DXL_ID));
-    }
-
-    /// The replacement path finds a new servo by the ID it ships with. If a joint ever took
-    /// ID 1, a fresh servo would be indistinguishable from it — and flashing "the missing
-    /// joint" onto ID 1 would re-address a servo that was never missing.
-    #[test]
-    fn factory_defaults_are_unused_on_the_bus() {
-        assert!(!JOINT_IDS.contains(&FACTORY_ID));
-        assert_ne!(IMU_DXL_ID, FACTORY_ID);
-        assert_ne!(FACTORY_BAUD_RATE, BAUD_RATE);
     }
 
     /// `MOUTH_INDEX` is used to skip a slot when mapping 14 policy actions onto 15 joints.
@@ -188,16 +161,35 @@ mod tests {
     fn battery_percent_spans_the_usable_range() {
         assert_eq!(battery_percent(BATTERY_FULL_V), 100.0);
         assert_eq!(battery_percent(BATTERY_EMPTY_V), 0.0);
-        assert!((battery_percent(7.4) - 50.0).abs() < 0.001);
+        assert!((battery_percent(11.25) - 50.0).abs() < 0.001);
     }
 
-    /// Voltages outside the span are ordinary — a fresh pack reads over 8.2 V off the
-    /// charger, and a robot being run into the ground reads under 6.6 V. Neither may
-    /// produce a percentage outside 0–100 for a caller to display.
+    /// Voltages outside the span are ordinary — a fresh 3S pack reads over 12.6 V off the
+    /// charger, and a robot being run into the ground reads under 9.9 V. Neither may produce
+    /// a percentage outside 0–100 for a caller to display.
     #[test]
     fn battery_percent_clamps_rather_than_extrapolating() {
-        assert_eq!(battery_percent(9.5), 100.0);
-        assert_eq!(battery_percent(5.0), 0.0);
+        assert_eq!(battery_percent(13.0), 100.0);
+        assert_eq!(battery_percent(8.0), 0.0);
+    }
+
+    /// The S288 reports supply in half-volt counts, so a frame carrying 25 of them is 12.5 V —
+    /// one count short of the full-charge figure, and it must read as a nearly-full pack rather
+    /// than as something over 100%. This is the quantisation the battery comment describes,
+    /// pinned so the span and the wire's resolution stay in a sane relationship if either is
+    /// edited: the whole span is under six counts wide, which is what "coarse indicator" means
+    /// in practice.
+    #[test]
+    fn a_half_volt_count_lands_inside_the_span() {
+        assert!((battery_percent(12.5) - 96.296_296_296_296_32).abs() < 1e-9);
+        assert_eq!(battery_percent(10.0), battery_percent(9.9 + 0.1));
+        assert!(battery_percent(10.0) > 0.0 && battery_percent(10.0) < 100.0);
+
+        let counts_over_the_span = (BATTERY_FULL_V - BATTERY_EMPTY_V) / 0.5;
+        assert!(
+            counts_over_the_span < 6.0,
+            "the S288's 0.5 V/count leaves only {counts_over_the_span} steps over the span"
+        );
     }
 
     /// A bus that did not answer arrives here as 0.0, and NaN is what a mean over an empty

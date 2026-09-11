@@ -47,15 +47,34 @@ The servo bus is already behind a trait, which is why this port is mostly additi
   integration point: a new impl plus a new alias target, and the control loop, safety arbiter,
   policies and kinematics do not change.
 
-Dynamixel semantics with no S288 equivalent, to be absorbed inside the new impl:
-- `reboot` is the Protocol 2 REBOOT instruction
-- `check_registers` / `adopt_missing_servo` are EEPROM register writes
-- `slow_sensors` reads registers 144-146 for supply voltage and case temperature
+Dynamixel semantics with no S288 equivalent. What each became in `bus_s288` — written down,
+because "absorbed" is exactly where a silent downgrade would hide:
+
+- `reboot` is the Protocol 2 REBOOT instruction -> **there is none.** The S288's latched `MError`
+  is cleared through the control bits instead, so `reboot` stops the servo, re-arms closed loop,
+  and reports honestly when the fault survives (an encoder-class one cannot be cleared in
+  software at all) rather than claiming a restart happened.
+- `check_registers` / `adopt_missing_servo` are EEPROM register writes -> **the S288 exposes no
+  user EEPROM**, so there is nothing to assert and the boot check is a chain census
+  (`verify_chain`) instead. `adopt_missing_servo` is cut, not stubbed: a fresh XL330 announces
+  itself at ID 1 / 57 600 baud and can be re-addressed from software, while an S288's address is
+  assigned through Unitree's Windows GUI, no set-ID command is documented, and all fifteen of
+  the bus's addresses are already taken by joints. A person sets the address before the servo
+  goes on the robot. The *waiting* behaviour is unchanged, which is what a swapped-and-not-yet-
+  powered chain needs either way.
+- `slow_sensors` reads registers 144-146 for supply voltage and case temperature -> **free.**
+  Every S288 frame already carries supply and two temperatures, so they arrive with the tick and
+  the call only tells the trait what it already has. Mind the resolution: supply is **0.5 V per
+  count**, so `battery_percent` is a five-or-six-step indicator on this hardware, not the smooth
+  number it was on the XL330.
+- One more, which has no Dynamixel analogue at all: **there is no sync read/write.** One frame
+  per joint per tick, and the reply *is* that joint's state, so `read` and `write` between them
+  cost one bus pass (~2.5 ms at 15 joints, 12% of a 50 Hz tick) rather than two.
 
 ## Delta map
 
 Additive (no core changes):
-- `duck-control/src/bus_s288.rs`: **not written yet.** A `RobotIo` impl speaking the Unitree S288 protocol
+- `duck-control/src/bus_s288.rs`: **written.** A `RobotIo` impl speaking the Unitree S288 protocol
   (docs and examples: github.com/unitreerobotics/digital_servo - `specs/protocol.md`,
   `python/servo_demo.py`). CRC plus the position/speed conversion factors.
   `unitree_servo/` is the local ground truth for writing it: a working host-side implementation, a
@@ -73,7 +92,18 @@ Additive (no core changes):
   encoder resolution is assuming something this unit does not deliver). Its joint-space
   `armature` is measured too: 5e-4 kg.m^2.
 - IMU: **not written yet.** An LSM6DSV16X reader over I2C, feeding `Sensors.imu` from the same
-  `read()`.
+  `read()`. `bus_s288` already takes it behind an `ImuSource` trait, and its placeholder
+  (`NoImu`) returns the zero sample with `ready() == false` — the same signal upstream uses for a
+  filter that has not converged — so the loop keeps running and nothing pretends to know which
+  way is down until the reader lands.
+- `duck-control/src/model.rs` + `bus.rs`: **the constants split.** `model` used to carry the
+  XL330's IDs, baud rate, EEPROM register table and IMU address alongside the mechanics. Those
+  are properties of one *bus*, not of the robot, so they moved next to the code that speaks them.
+  `model` keeps what survives a servo swap — joint count and names, home pose, mouth travel — and
+  the battery span, which is the one number the swap *did* change: 2S 6.6-8.2 V -> 3S 9.9-12.6 V.
+  The new pair is an envelope, not a measurement, and `model.rs` says so; the method that
+  produced the old pair (run a duck flat, watch where it struggles) is what should replace it.
+  `FakeIo`'s fake pack moved with the span (7.4 -> 11.25 V) so `--fake` is not a flat robot.
 - `deploy/robotd.toml`: serial port, camera device, model paths, policy slots. Installed to
   `/etc/robot/robotd.toml` by `scripts/deploy-jetson-skeleton.sh` and only when the board has none -
   the file on a running robot is the robot's, not the tree's.
@@ -102,7 +132,13 @@ The Jetson counterparts of `setup-npu.sh` and `setup-rkaiq.sh` have no reason to
 no NPU runtime to install and no `rkaiq` to replace.
 
 Core patches, kept as small as possible:
-- `robotd/src/main.rs`: the `BusIo` alias and `open_bus()`. Not started.
+- `robotd/src/main.rs`: the `BusIo` alias and `open_bus()`. **Done.** The alias now names
+  `bus_s288::BusS288<SerialTransport>`; `open_bus` verifies the chain instead of asserting
+  registers, and `adopt_missing_servo` is deleted rather than left half-working (see the
+  semantics list above). `robot.rebootMotors` with no names asks `bus_s288::all_ids()` rather
+  than `model::JOINT_IDS`. A plain edit and not a `cfg`/feature switch, deliberately: this fork
+  runs one robot, both bus impls still compile inside `duck-control` so neither bit-rots, and the
+  choice is one line to reverse. Parameterising it upstream stays a candidate below.
 - `mediad/`: **done, and the shape to keep.** `platform.rs` (new) holds the Jetson capture path -
   Argus, the two-element bin, and why nothing meters the picture - while `pipeline.rs` and
   `main.rs` grew one arm each to dispatch to it, and `wire_encoder_setup` gained the `x264enc` arm.
@@ -133,7 +169,9 @@ check.
 Both of these would shrink this fork permanently, and neither changes behaviour on a Radxa:
 
 - parameterise the bus implementation in `robotd` (a `--bus` argument, or a platform feature)
-  instead of hardcoding `DynamixelIo`
+  instead of hardcoding one impl behind the `BusIo` alias — which is the S288's now and was the
+  Dynamixel one before it. Either way a fork pays for this with a one-line edit it has to
+  remember to re-apply on every sync.
 - parameterise `mediad`'s capture/encoder element names and who owns auto-exposure
 
 Worth an issue first: the project is deliberately single-board and treats complexity as a cost.

@@ -1581,8 +1581,9 @@ pub struct SafetyParams {
     /// The gain limp-fall yields at — low enough to give way rather than fight the floor.
     pub gain_limp: u16,
     /// Sit down and power the machine off when the battery EMA reaches the empty floor
-    /// (6.6 V — `duck_control::model::BATTERY_EMPTY_V`). The EMA moves over ~10 s, so a
-    /// load sag cannot trip it.
+    /// (9.9 V — `duck_control::model::BATTERY_EMPTY_V`; it was 6.6 V on the 2S XL330 robot, and
+    /// the 3S pair has not been measured against a running duck yet). The EMA moves over ~10 s,
+    /// so a load sag cannot trip it.
     pub battery_empty_shutdown: bool,
 
     /// Go limp *while falling*, to land soft instead of fighting the floor all the way
