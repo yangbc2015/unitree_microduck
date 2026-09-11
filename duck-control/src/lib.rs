@@ -8,6 +8,10 @@
 //! designed in `docs/design/robotd-design.md` §2.
 
 pub mod bus;
+/// The Unitree S288 bus — a second `RobotIo` for a servo that shares no protocol with the
+/// Dynamixel one above. Both compile everywhere; `robotd`'s `BusIo` alias chooses which one
+/// this robot runs (see `JETSON.md`). Nothing else in the crate knows which is in use.
+pub mod bus_s288;
 pub mod fall;
 pub mod imu;
 pub mod io;
