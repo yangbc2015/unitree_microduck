@@ -395,17 +395,22 @@ pub struct Config {
     /// joint into the chassis the first time a policy moves it.
     pub sign: [f64; NUM_JOINTS],
     pub offset_rad: [f64; NUM_JOINTS],
-    /// Position gain sent every frame, in the firmware's own units.
+    /// Position gain, in the unit `unitree_servo/`'s bench used — **not** the firmware's own
+    /// counts.
     ///
-    /// The S288 has no gain register — `k_pos`/`k_spd` ride in every control frame — so the
-    /// trait's "set the gain on every joint" becomes "remember it and send it from now on".
-    /// What it cannot bridge is the *scale*: 20 is a firm hold on the bench here (10-20 with
-    /// `k_spd` 1 held ±0.2 rad steps and settled), while the Dynamixel side runs kP 200 and
-    /// drops to 50 to go limp. [`GAIN_SCALE`] is the conversion and it is a starting point, not
-    /// a measurement — the two firmwares count their gains differently and nothing has been
-    /// calibrated across them yet.
-    pub kp_raw: i16,
-    pub kd_raw: i16,
+    /// 10-20 with `kd` 1 is what held ±0.2 rad steps without ringing on the bench; 10 is the
+    /// default because it is the soft end of a range that was measured. [`KP_COUNTS`] turns it
+    /// into what the frame carries, using the reference implementation's own conversion rather
+    /// than a constant this file invented — an invented one would have been plausible and
+    /// wrong, which is the failure mode the module header spends three paragraphs on.
+    ///
+    /// The trait's `kp` arrives as a `u16` in *Dynamixel* units, where the design doc's running
+    /// value is 200 and going limp is 50. Nothing has measured the two firmware's gain units
+    /// against each other, so [`RobotIo::set_gain`] treats the number as already being in this
+    /// unit and says so. If 200 turns out to oscillate where 10 was firm, the translation
+    /// belongs at the call site — a measurement, not a guess made here.
+    pub kp: u16,
+    pub kd: u16,
     /// Extra attempts per joint within one pass when a reply is short or unparseable.
     ///
     /// Not optional at this chain length: the manual lists packet loss on a 14-servo chain as
@@ -414,10 +419,17 @@ pub struct Config {
     pub read_timeout: Duration,
 }
 
-/// The Dynamixel-side running gain is 200; 20 is the bench's firm hold. See [`Config::kp_raw`].
-pub const GAIN_SCALE: f64 = 0.1;
-/// Bench value: `k_spd` 1 held steps without ringing. Scaled like the position gain.
-pub const DEFAULT_KD_RAW: i16 = 1;
+/// Joint-side gain -> the firmware's `k_pos` counts, per unit.
+///
+/// From `unitree_servo/unitree_servo.py`: `Kp / RATIO² × 1_280_000`, the conversion that was on
+/// the wire when 10-20 came out a firm hold. Deriving it again here would only be a second
+/// guess at the same firmware unit; inheriting it means the bench's numbers stay meaningful.
+pub const KP_COUNTS: f64 = 1_280_000.0 / (RATIO * RATIO);
+/// The same for `k_spd`, which the reference scales by `1_280_000_00`.
+pub const KD_COUNTS: f64 = 128_000_000.0 / (RATIO * RATIO);
+
+/// `kd` 1 held steps without ringing on the bench. See [`KP_COUNTS`] for the units.
+pub const DEFAULT_KD: u16 = 1;
 
 impl Default for Config {
     fn default() -> Self {
@@ -430,8 +442,8 @@ impl Default for Config {
             ids,
             sign: [1.0; NUM_JOINTS],
             offset_rad: [0.0; NUM_JOINTS],
-            kp_raw: (200.0 * GAIN_SCALE).round() as i16,
-            kd_raw: DEFAULT_KD_RAW,
+            kp: 10,
+            kd: DEFAULT_KD,
             retries: 1,
             read_timeout: Duration::from_millis(20),
         }
@@ -487,8 +499,9 @@ pub struct BusS288<T: Transport = SerialTransport> {
     /// frame; kept so [`RobotIo::slow_sensors`] has something to answer with.
     slow: SlowSensors,
     sampled_at: Option<Instant>,
-    gain_kp: i16,
-    gain_kd: i16,
+    /// Gains in [`Config::kp`]'s unit, converted to wire counts per frame by [`KP_COUNTS`].
+    gain_kp: u16,
+    gain_kd: u16,
     torque_on: bool,
     health: BusHealth,
 }
@@ -505,8 +518,8 @@ impl<T: Transport> BusS288<T> {
         Ok(Self {
             transport,
             imu: Box::new(NoImu),
-            gain_kp: cfg.kp_raw,
-            gain_kd: cfg.kd_raw,
+            gain_kp: cfg.kp,
+            gain_kd: cfg.kd,
             cfg,
             targets: JointTargets::new([0.0; NUM_JOINTS]),
             sample: Sensors::default(),
@@ -558,7 +571,10 @@ impl<T: Transport> BusS288<T> {
     fn exchange_joint(&mut self, joint: usize, torque_nm: f64) -> Result<Feedback> {
         let id = self.cfg.ids[joint];
         let (kp, kd) = if self.torque_on {
-            (self.gain_kp, self.gain_kd)
+            (
+                clamp_i16((self.gain_kp as f64 * KP_COUNTS).round()),
+                clamp_i16((self.gain_kd as f64 * KD_COUNTS).round()),
+            )
         } else {
             // "Torque off" for a servo with no torque-enable register is a closed-loop frame
             // with both gains and the feedforward at zero: the FOC holds no current, so the
@@ -685,8 +701,10 @@ impl<T: Transport> RobotIo for BusS288<T> {
         self.pass()
     }
 
+    /// Stored in [`Config::kp`]'s unit; the number is taken as already being in it. See that
+    /// field's docs for why the cross-firmware translation is *not* a factor invented here.
     fn set_gain(&mut self, kp: u16) -> Result<()> {
-        self.gain_kp = clamp_i16((kp as f64 * GAIN_SCALE).round());
+        self.gain_kp = kp;
         Ok(())
     }
 
@@ -1006,12 +1024,29 @@ mod tests {
     }
 
     #[test]
+    fn the_gain_reaches_the_wire_through_the_reference_conversion() {
+        let mut bus = full_bus();
+        // 20 is the bench's firm hold. `unitree_servo/unitree_servo.py` turns it into 308 counts
+        // (`Kp / RATIO² × 1.28e6`) and `Kd` 1 into 1539. Literals on purpose: this test exists to
+        // catch the bus inventing a plausible factor of its own. A 1:1 pass-through would send
+        // 20 and be 15x too soft, and the number on the wire would look perfectly reasonable.
+        bus.set_gain(20).unwrap();
+        bus.set_torque(true).unwrap();
+        let last = bus.transport_mut().servos[0].seen.last().copied().unwrap();
+        assert_eq!(i16::from_le_bytes([last[12], last[13]]), 308);
+        assert_eq!(i16::from_le_bytes([last[14], last[15]]), 1539);
+
+        // The top of the u16 range converts past i16::MAX: it must clamp, not wrap into a
+        // negative gain and drive the joint the other way.
+        bus.set_gain(u16::MAX).unwrap();
+        bus.set_torque(true).unwrap();
+        let last = bus.transport_mut().servos[0].seen.last().copied().unwrap();
+        assert_eq!(i16::from_le_bytes([last[12], last[13]]), i16::MAX);
+    }
+
+    #[test]
     fn torque_off_sends_zero_gains_and_no_feedforward() {
         let mut bus = full_bus();
-        bus.set_gain(200).unwrap();
-        let kp = bus.gain_kp;
-        assert_eq!(kp, 20, "200 in trait units is 20 in firmware units");
-
         bus.set_torque(false).unwrap();
         let last = bus.transport_mut().servos[0].seen.last().copied().unwrap();
         assert_eq!(i16::from_le_bytes([last[12], last[13]]), 0);
