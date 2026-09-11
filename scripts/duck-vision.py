@@ -174,6 +174,22 @@ class VisionClient:
             self.model = "local"
         return self.model
 
+    def post_chat(self, payload):
+        request = urllib.request.Request(
+            self.base_url + "/chat/completions",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=self.timeout) as resp:
+                return json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as why:
+            body = why.read().decode("utf-8", "replace")[:400]
+            raise RuntimeError(f"vision endpoint HTTP {why.code}: {body}") from why
+        except Exception as why:
+            raise RuntimeError(f"vision endpoint unreachable: {why}") from why
+
     def analyze(self, jpeg):
         payload = {
             "model": self.resolve_model(),
@@ -193,23 +209,33 @@ class VisionClient:
             ],
             "max_tokens": self.max_tokens,
             "temperature": 0.2,
+            # Ask a thinking model not to think. Left to itself (MiniCPM-V 4.6 on this board) it
+            # spends its budget on a monologue and answers with one thin line - or puts nothing at all
+            # in `content` and leaves the thinking in `reasoning_content`. Measured on one frame:
+            # thinking on -> 12-character answer plus 105 characters of thinking; off -> a 33-character
+            # description and no thinking. The field is llama.cpp's own extension, so an endpoint that
+            # does not know it rejects the whole request over it: drop it and retry rather than losing
+            # the frame.
+            "chat_template_kwargs": {"enable_thinking": False},
         }
-        request = urllib.request.Request(
-            self.base_url + "/chat/completions",
-            data=json.dumps(payload).encode("utf-8"),
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
         try:
-            with urllib.request.urlopen(request, timeout=self.timeout) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
-        except urllib.error.HTTPError as why:
-            body = why.read().decode("utf-8", "replace")[:400]
-            raise RuntimeError(f"vision endpoint HTTP {why.code}: {body}") from why
-        except Exception as why:
-            raise RuntimeError(f"vision endpoint unreachable: {why}") from why
+            data = self.post_chat(payload)
+        except RuntimeError as why:
+            if "HTTP 400" not in str(why):
+                raise
+            payload.pop("chat_template_kwargs", None)
+            data = self.post_chat(payload)
         message = (data.get("choices") or [{}])[0].get("message") or {}
-        return message.get("content") or message.get("reasoning_content") or ""
+        content = (message.get("content") or "").strip()
+        if content:
+            return content
+        # Never fall back to `reasoning_content`. On a thinking model that field is the model talking
+        # to itself ("嗯，用户让我用中文简洁描述一张摄像头画面…"), and printing that as the description is
+        # worse than printing nothing: the console and the log would read a monologue, not a scene.
+        thinking = (message.get("reasoning_content") or "").strip()
+        if thinking:
+            log(f"no description: the reply was all thinking ({len(thinking)} chars)")
+        return ""
 
 
 # ── connection handling ───────────────────────────────────────────────────────
@@ -259,6 +285,9 @@ class Server:
             log(f"analysis failed for frame {seq}:", why)
             return False
         elapsed = time.time() - started
+        if not text:
+            log(f"frame {seq} ({len(jpeg)} bytes, {elapsed:.1f}s): nothing to report")
+            return False
         log(f"frame {seq} ({len(jpeg)} bytes, {elapsed:.1f}s)" + (f", saved {saved}" if saved else ""))
         print(text, flush=True)
         try:

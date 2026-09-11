@@ -151,6 +151,14 @@ analyses* - frames arriving inside it are dropped, and the model's own latency c
 - **Dark frames are purple, and that is real.** The IMX219's auto white balance gives up in near
   darkness and the ISP hands back purple-red frames. The model will describe them as dark/purple;
   add light rather than tuning the prompt away.
+- **A thinking model answers in two parts.** MiniCPM-V 4.6's template thinks by default: the reply
+  lands in `content` (often one thin line) and the working goes to `reasoning_content`. The analyser
+  asks for `enable_thinking: false` in `chat_template_kwargs` - on one frame that turned a
+  12-character answer plus 105 characters of monologue into a 33-character description and no
+  thinking. The field is llama.cpp's own extension, so a request that gets `HTTP 400` for it is
+  retried without it rather than losing the frame. If a reply still carries no `content`, the frame is
+  logged as `nothing to report` and skipped: printing the monologue as a description would put the
+  model's voice in the console instead of the scene.
 - **Ports.** The vision socket (`8765`) is separate from the console (`8080`), signalling (`8443`)
   and the model (`8081`). The launcher fails fast if `VISION_LISTEN` is taken.
 - **Model latency.** A Q8_0 MiniCPM-V on an Orin Nano takes several seconds per 640px frame. Keep
