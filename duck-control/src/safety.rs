@@ -39,18 +39,29 @@ use crate::obs::Command;
 
 /// The actuator's position range: one turn, centred, from the XL330's count↔radian conversion.
 ///
-/// This is the *actuator's* travel, not a per-joint anatomical limit — the alpha robot's
-/// real joint limits live in the MJCF, which is not vendored here. So this catches a policy
-/// emitting `NaN`, an absurd action scale, or a garbage tensor; it will not stop a joint
-/// being driven somewhere mechanically unwise. Recorded plainly rather than dressed up,
-/// because a limit that looks per-joint but is not would imply protection nobody has.
+/// This is the *actuator's* travel, not a per-joint anatomical limit — and the joints' real
+/// limits are **in this repository**, in `kinematics/assets/alpha/robot_walk.xml`, which the
+/// `kinematics` crate already parses into a `range` per joint (it is `pub(crate)` today).
+/// Nothing here reads it. So this clamp catches a policy emitting `NaN`, an absurd action
+/// scale, or a garbage tensor; it will not stop a joint being driven somewhere mechanically
+/// unwise. Recorded plainly rather than dressed up, because a limit that looks per-joint but is
+/// not would imply protection nobody has.
 ///
-/// **Unchanged across the servo swap, and that is a gap rather than a decision.** The S288's
-/// own travel is not the XL330's, and `bus_s288` reads a multi-turn rotor position through a
-/// 288:1 gearbox, so ±π may be neither reachable nor the right guard. Setting it from the
-/// S288's real range is bench work (`s288-servo-port.md` § phase 5); until someone does that,
-/// this is a sanity bound and not a statement about the hardware — which is all the paragraph
-/// above ever claimed it was, one servo ago.
+/// **Two things changed with the servo, and neither is settled.**
+///
+/// 1. The S288 has **no firmware travel limit at all** — it is a multi-turn absolute encoder
+///    whose turn count simply resets on power-up — so on this robot the software is the only
+///    thing between a policy and a joint's mechanical stop. The XL330 had a one-turn position
+///    mode; this does not.
+/// 2. ±π is wide enough to cover every joint in the MJCF (the widest is `head_yaw` at ±2.967
+///    rad), which also means it does not constrain the *narrow* joints: a knee whose travel is
+///    ±1.57 rad can be commanded to 3.0. A single global pair cannot express "one turn" and
+///    "this joint's range" at the same time.
+///
+/// Closing that means clamping per joint from the MJCF's own ranges — `robotd` already depends
+/// on `kinematics`, so the data is one accessor away — and confirming on the bench that the
+/// servo can physically reach what the assembly needs, since no firmware bound will catch it if
+/// it cannot. `docs/project/s288-servo-port.md` § phase 5.
 pub const ACTUATOR_MIN: f64 = -std::f64::consts::PI;
 pub const ACTUATOR_MAX: f64 = std::f64::consts::PI;
 
