@@ -21,6 +21,7 @@ they are what says whether a difference is a port or a project.
 | H.264 | `mpph264enc`, Rockchip VPU | **no hardware encoder at all**, so `x264enc` | ported |
 | WebRTC | `webrtcsink` from the `microduck-gst-plugins` release, patched to know `mpph264enc` | `webrtcsink` from `gst-plugins-rs`, stock | ported |
 | detector | RKNN on the NPU (`.rknn`) | none; the `.onnx` path would be CPU | open |
+| VLM vision | none | `mediad --stream-to` into `scripts/duck-vision.sh`, against a local llama.cpp | done |
 | audio | AIC3104 on I2C3, AIC3x DKMS | nothing chosen | open |
 | depth | VL53L5CX/L8CX over I2C | same sensor class would apply | unverified |
 | provisioning | `setup-rkaiq.sh`, `setup-npu.sh`, `setup-gstreamer.sh`, `provision-board.sh` | `scripts/deploy-jetson-skeleton.sh` and `scripts/deploy-jetson-binaries.sh`; no NPU or `rkaiq` counterpart to write | partial |
@@ -342,6 +343,11 @@ Then, with the camera on CAM0 and the test pattern as the fallback:
 default source is a test pattern, which is what makes a session verifiable with no camera attached
 - it is the right first run on a new board, because it exercises signalling, the datachannel and
 the encoder with the capture path out of the picture.
+
+The local vision loop is separate from the console and needs no browser: `scripts/duck-vision.sh`
+starts `mediad --stream-to` and the analyser together, and `docs/project/duck-vision.md` is the
+feature's own page. On this board run it as `MEDIAD_ROTATE=0 scripts/duck-vision.sh` with the
+llama.cpp server on `:8081`; on a real duck head leave `MEDIAD_ROTATE` unset.
 
 ## What bit on the way
 

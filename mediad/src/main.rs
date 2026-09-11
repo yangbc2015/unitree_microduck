@@ -153,6 +153,27 @@ struct Args {
     #[arg(long)]
     flip_in_pipeline: bool,
 
+    /// Push JPEG frames to this WebSocket URL from startup, for a model on this board.
+    ///
+    /// The same machinery `media.stream` drives, but configured rather than asked for over a
+    /// session: a robot whose model lives on the robot gets camera frames with no browser in the
+    /// loop. Off by default. A receiver that is down or gone is logged and redialled, never
+    /// fatal — the video is the point and the model is a passenger.
+    #[arg(long)]
+    stream_to: Option<String>,
+
+    /// Rate for `--stream-to`, frames a second. One is plenty for a VLM and costs almost nothing.
+    #[arg(long, default_value_t = 1.0)]
+    stream_fps: f64,
+
+    /// Longest edge for `--stream-to`, in pixels.
+    #[arg(long, default_value_t = 640)]
+    stream_longest: u32,
+
+    /// JPEG quality for `--stream-to`, 1..=100.
+    #[arg(long, default_value_t = 70)]
+    stream_quality: u8,
+
     /// Where the daemons listen, when not at `proto::socket`'s paths.
     ///
     /// On a robot the defaults are right and none of these is ever typed. They exist for the twin
@@ -570,6 +591,24 @@ fn main() -> ExitCode {
             video: video.clone(),
             streamer: std::sync::Arc::clone(&streamer),
         };
+
+        // A model on this board, if one was asked for: the same stream `media.stream` drives,
+        // started from the command line rather than a session. Best-effort — a receiver that is
+        // down is redialled by the pump, and a refusal here is a warning, not a failed daemon.
+        if let Some(url) = args.stream_to.clone() {
+            let config = mediad::stream::Config {
+                url,
+                fps: args.stream_fps,
+                longest: args.stream_longest,
+                quality: args.stream_quality,
+                // Still frames, not a predicted stream: a VLM wants a picture it can read on
+                // its own, and JPEG needs no keyframe to start and no decoder state to keep.
+                encoding: mediad::stream::Encoding::Jpeg,
+            };
+            if let Err(why) = streamer.start(config) {
+                tracing::warn!(error = %why, "the local frame stream did not start; carrying on without it");
+            }
+        }
 
         // The relay has been up since before the pipeline; this is the point its control lanes can
         // start answering for the robot's own media.
