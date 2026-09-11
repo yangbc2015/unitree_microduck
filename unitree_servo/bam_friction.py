@@ -28,7 +28,7 @@ import sys
 import time
 from datetime import datetime
 
-from unitree_servo import RATIO, MotorProtocolSync
+from unitree_servo import RATIO, MotorProtocolSync, emit_result
 
 BAUD = 6_000_000
 DEFAULT_PORT = "/dev/unitree_servo"
@@ -139,13 +139,28 @@ def cmd_sweep(m, a):
         print(f"  {v_meas:10.4f}   {f_counts:+12.2f}   {tor_out(f_counts):+10.5f}   "
               f"{tor_out(bias):+10.5f}")
         fit_rows.append((v_meas, f_counts, tor_out(f_counts), tor_out(bias)))
-    with open(os.path.join(OUTDIR, f"M6a_friction_curve_id{a.id}.csv"), "w", newline="") as f:
-        w = csv.writer(f)
-        w.writerow(["# friction curve, paired both directions"])
-        w.writerow(["v_out_rad_s", "F_rot_counts", "F_out_Nm", "gravity_bias_out_Nm"])
-        w.writerows(fit_rows)
+    # Write a timestamped copy as well as the stable name: the stable name is scratch and gets
+    # overwritten by the next sweep, and with it the only intermediate artifact behind a
+    # published fit. (The raw per-frame log is timestamped already; this keeps the curve too.)
+    for path in (os.path.join(OUTDIR, f"M6a_friction_curve_id{a.id}.csv"),
+                 os.path.join(OUTDIR, f"M6a_friction_curve_id{a.id}_"
+                                      f"{datetime.now():%Y%m%d_%H%M%S}.csv")):
+        with open(path, "w", newline="") as f:
+            w = csv.writer(f)
+            w.writerow([f"# friction curve, paired both directions, {datetime.now():%Y-%m-%d %H:%M:%S}"])
+            w.writerow(["v_out_rad_s", "F_rot_counts", "F_out_Nm", "gravity_bias_out_Nm"])
+            w.writerows(fit_rows)
     print(f"\nraw log: {log.path}")
     print(f"curve  : {OUTDIR}/M6a_friction_curve_id{a.id}.csv")
+    emit_result("friction_sweep", id=a.id, kd=a.kd,
+                v_out=[r[0] for r in fit_rows],
+                f_out_nm=[r[2] for r in fit_rows],
+                gravity_bias_out_nm=[r[3] for r in fit_rows],
+                v_cmd=sorted(pairs), n_records=len(results),
+                case_c=statistics.fmean(r["temp"] for r in results),
+                supply_v=statistics.fmean(r["vol"] for r in results),
+                curve_csv=os.path.join(OUTDIR, f"M6a_friction_curve_id{a.id}.csv"),
+                raw_log=log.path)
 
 
 # ---------------------------------------------------------------- breakaway
@@ -180,6 +195,7 @@ def cmd_breakaway(m, a):
         taus.append(round(t, 5))
         t += a.step
     signs = {"both": (+1, -1), "+": (1,), "-": (-1,)}[a.dir]
+    onsets = {}
     for sign in signs:
         print(f"--- ramp {sign:+d} direction ---")
         fb = _settle(m, a.id, a.p_ref)
@@ -205,9 +221,14 @@ def cmd_breakaway(m, a):
                   f"({fb['torque_raw']:+d} counts)")
         if broke is None:
             print(f"  no motion up to {a.tmax} Nm in this direction")
+        onsets["+" if sign > 0 else "-"] = abs(broke) if broke is not None else None
     log.close()
     _park(m, a.id)
     print(f"\nraw log: {log.path}")
+    fb = m.send_and_receive(a.id, 0, 0, 0, 0, 0, 0, 0)
+    emit_result("breakaway", id=a.id, step=a.step, tmax=a.tmax, detect_rad=a.detect,
+                onset_out_nm=onsets,
+                case_c=fb["Temp"], supply_v=fb["vol"], raw_log=log.path)
 
 
 # ---------------------------------------------------------------- encoder (M1/M7)
@@ -219,6 +240,7 @@ def cmd_encoder(m, a):
     print("M1/M7: step 0 -> +10deg -> 0 -> -10deg -> 0, compare转子 vs 输出端编码器")
     t0 = time.perf_counter()
     seq = [0.0, 0.1745, 0.0, -0.1745, 0.0]
+    pts = []
     for tgt in seq:
         t_end = time.perf_counter() + a.hold
         while time.perf_counter() < t_end:
@@ -229,9 +251,12 @@ def cmd_encoder(m, a):
         print(f"  target {math.degrees(tgt):+7.2f}deg -> 转子(输出端等效) {rot_out:+.5f} rad / "
               f"{math.degrees(rot_out):+7.3f}deg | 输出端编码器 {fb['ExPos']:.5f} rad / "
               f"{math.degrees(fb['ExPos']):+7.3f}deg | 差 {math.degrees(rot_out - fb['ExPos']):+.4f}deg")
+        pts.append(dict(target_rad=tgt, rotor_out_rad=rot_out, out_enc_rad=fb["ExPos"]))
     log.close()
     _park(m, a.id)
     print(f"raw log: {log.path}")
+    emit_result("encoder", id=a.id, kp=a.kp, points=pts,
+                case_c=fb["Temp"], supply_v=fb["vol"], raw_log=log.path)
 
 
 # ---------------------------------------------------------------- report / fit

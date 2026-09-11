@@ -1,0 +1,28 @@
+/dev/unitree_servo @ 6000000, id 0
+torque ramp 0 -> 0.06 N.m (output side) in steps of 0.005 N.m, kp=kd=0, mode=1
+!! the shaft WILL start turning -- nothing may be attached to the horn
+
+--- ramp +1 direction ---
+  settled at -0.0994 rad, residual torque -3 counts
+  tau_out=+0.0050 Nm held 1.5s: still (+0 counts)
+  tau_out=+0.0100 Nm held 1.5s: still (+6 counts)
+  tau_out=+0.0150 Nm held 1.5s: still (+9 counts)
+  tau_out=+0.0200 Nm held 1.5s: still (+15 counts)
+  tau_out=+0.0250 Nm held 1.5s: still (+18 counts)
+  tau_out=+0.0300 Nm held 1.5s: still (+23 counts)
+  tau_out=+0.0350 Nm held 1.5s: still (+27 counts)
+  tau_out=+0.0400 Nm -> MOTION after +0.02004 rad (+31 counts)
+--- ramp -1 direction ---
+  settled at -0.0994 rad, residual torque -3 counts
+  tau_out=-0.0050 Nm held 1.5s: still (-7 counts)
+  tau_out=-0.0100 Nm held 1.5s: still (-12 counts)
+  tau_out=-0.0150 Nm held 1.5s: still (-15 counts)
+  tau_out=-0.0200 Nm held 1.5s: still (-21 counts)
+  tau_out=-0.0250 Nm held 1.5s: still (-25 counts)
+  tau_out=-0.0300 Nm held 1.5s: still (-30 counts)
+  tau_out=-0.0350 Nm held 1.5s: still (-33 counts)
+  tau_out=-0.0400 Nm -> MOTION after -0.02015 rad (-39 counts)
+
+raw log: /home/jetson/Desktop/microduck/unitree_servo/bam_data/M4_breakaway_id0_20260911_201730.csv
+@@RESULT@@ {"case_c": 61, "detect_rad": 0.02, "id": 0, "kind": "breakaway", "onset_out_nm": {"+": 0.04, "-": 0.04}, "raw_log": "/home/jetson/Desktop/microduck/unitree_servo/bam_data/M4_breakaway_id0_20260911_201730.csv", "step": 0.005, "supply_v": 12.0, "tmax": 0.06}
+servo parked (mode 0)

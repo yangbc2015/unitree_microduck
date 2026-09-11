@@ -1,0 +1,26 @@
+/home/jetson/.local/lib/python3.12/site-packages/matplotlib/projections/__init__.py:63: UserWarning: Unable to import Axes3D. This may be due to multiple versions of Matplotlib being installed (e.g. as a system package and as a pip package). As a result, the 3D projection is not available.
+  warnings.warn("Unable to import Axes3D. This may be due to multiple versions of "
+curve: /home/jetson/Desktop/microduck/unitree_servo/bam_data/units/S288-01-r2/M6a_friction_curve.csv
+
+fitted Stribeck model  F(v) = Fc + Fs*exp(-(v/vs)^alpha) + Fv*v   [output N.m]
+  Fc (coulomb)               0.01570  +- 0.00348
+  Fs (stribeck amp)          0.01949  +- 0.00949
+  vs (dtheta_stribeck)       0.02574  +- 0.02174
+  alpha                      0.50000  +- 0.48855
+  Fv (viscous)               0.01323  +- 0.00285
+  rms residual               0.00098 N.m
+  corr(Fc,Fs) = -0.888   <- near -1 means the split is not identifiable
+
+robust, fit-independent numbers [N.m output]
+  breakaway / stiction      0.04000  (bracket 0.035-0.0375)
+  stalled shaft plateau     0.03299 at v=0.0004 rad/s
+  dip minimum               0.01972 at v=0.1901 rad/s
+  0.03-0.4 rad/s plateau    0.02062
+  viscous slope (0.4-1.2)   0.00737 N.m*s/rad
+  fit F(v->0)=Fc+Fs         0.03519  vs stalled 0.03299 vs breakaway 0.04000
+  XL330 for comparison      Fc=0.0119 Fs=0.00085 vs=0.261 alpha=8.53 Fv=0.00579
+
+plot    : /home/jetson/Desktop/microduck/unitree_servo/bam_data/units/S288-01-r2/M6a_friction_fit_S288-01-r2.png
+json    : /home/jetson/Desktop/microduck/unitree_servo/bam_data/units/S288-01-r2/s288_bam_friction_S288-01-r2.json
+markdown: /home/jetson/Desktop/microduck/unitree_servo/bam_data/units/S288-01-r2/S288_BAM_汇总表_S288-01-r2.md
+@@RESULT@@ {"Fc": 0.015701495782461595, "Fs": 0.01949338399543204, "Fv": 0.013231507709564676, "alpha": 0.5000000000000001, "corr_Fc_Fs": -0.8875478567837939, "curve_csv": "/home/jetson/Desktop/microduck/unitree_servo/bam_data/units/S288-01-r2/M6a_friction_curve.csv", "err": {"Fc": 0.0034819875602041745, "Fs": 0.00949389673276367, "Fv": 0.0028509774152122498, "alpha": 0.488550715867414, "vs": 0.021739765069851827}, "json": "/home/jetson/Desktop/microduck/unitree_servo/bam_data/units/S288-01-r2/s288_bam_friction_S288-01-r2.json", "kind": "friction_fit", "markdown": "/home/jetson/Desktop/microduck/unitree_servo/bam_data/units/S288-01-r2/S288_BAM_\u6c47\u603b\u8868_S288-01-r2.md", "png": "/home/jetson/Desktop/microduck/unitree_servo/bam_data/units/S288-01-r2/M6a_friction_fit_S288-01-r2.png", "rms_residual_nm": 0.0009793386754188202, "robust": {"dip": 0.019723070687948173, "dip_v": 0.19011966032930783, "plateau": 0.020624210835983488, "stall_plateau": 0.03298851101016175, "stiction": 0.04, "viscous_slope": 0.007373035078129593}, "stiction": 0.04, "tag": "S288-01-r2", "vs": 0.025741788576982925}

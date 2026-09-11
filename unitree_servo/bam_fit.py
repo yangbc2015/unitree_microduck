@@ -8,6 +8,7 @@ Output: M6a_friction_fit.png   data + Stribeck fit + XL330 reference
 """
 from __future__ import annotations
 
+import argparse
 import glob
 import json
 import os
@@ -18,6 +19,8 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.optimize import curve_fit
+
+from unitree_servo import emit_result
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(HERE, "bam_data")
@@ -37,11 +40,14 @@ def stribeck(v, Fc, Fs, vs, alpha, Fv):
     return Fc + Fs * np.exp(-(v / vs) ** alpha) + Fv * v
 
 
-def load_curve():
-    cands = sorted(glob.glob(os.path.join(DATA, "M6a_friction_curve_id*.csv")))
-    if not cands:
-        sys.exit("no friction curve csv; run: bam_friction.py sweep ...")
-    path = cands[-1]
+def load_curve(path=None):
+    if path is None:
+        cands = sorted(glob.glob(os.path.join(DATA, "M6a_friction_curve_id*.csv")))
+        if not cands:
+            sys.exit("no friction curve csv; run: bam_friction.py sweep ...")
+        path = cands[-1]
+    if not os.path.exists(path):
+        sys.exit(f"no such curve: {path}")
     v, F = [], []
     with open(path) as f:
         for line in f:
@@ -54,7 +60,20 @@ def load_curve():
 
 
 def main():
-    path, v, F = load_curve()
+    ap = argparse.ArgumentParser(
+        description="Fit the Stribeck friction model to one unit's sweep curve.")
+    ap.add_argument("--curve", default=None, help="M6a_friction_curve csv (default: newest)")
+    ap.add_argument("--out-dir", default=DATA, help="where to write png/json/markdown")
+    ap.add_argument("--tag", default="", help="filename infix, e.g. S288-03")
+    ap.add_argument("--stiction", type=float, default=None,
+                    help="this unit's breakaway torque (default: the built-in value)")
+    a = ap.parse_args()
+    global STICTION
+    if a.stiction is not None:
+        STICTION = a.stiction
+
+    suffix = f"_{a.tag}" if a.tag else ""
+    path, v, F = load_curve(a.curve)
     print(f"curve: {path}")
     moving = v > 0.03
     allp = np.ones_like(v, dtype=bool)      # keep the stalled point: it pins the v->0 limit
@@ -139,7 +158,8 @@ def main():
     ax2.set_title("same data, log-x: the Stribeck dip lives below 0.04 rad/s")
     ax2.legend(fontsize=7.5, loc="lower right")
     fig.tight_layout()
-    png = os.path.join(DATA, "M6a_friction_fit.png")
+    png = os.path.join(a.out_dir, f"M6a_friction_fit{suffix}.png")
+    os.makedirs(a.out_dir, exist_ok=True)
     fig.savefig(png)
 
     # ---------- json (m6-style keys, S288, output side) ----------
@@ -181,7 +201,7 @@ def main():
             "caveat": "v > 1.2 rad/s points are noisy (torque sd jumps to ~110 counts)",
         },
     }
-    js = os.path.join(DATA, "s288_bam_friction.json")
+    js = os.path.join(a.out_dir, f"s288_bam_friction{suffix}.json")
     with open(js, "w") as f:
         json.dump(out, f, indent=2, ensure_ascii=False)
 
@@ -229,8 +249,10 @@ def main():
    只给 `damping`（粘滞）是不够的。
 3. **下凹很浅但确实存在**：0.083 rad/s 处 0.0213 → 最低 {robust['dip']:.4f}（v≈{robust['dip_v']:.3f}）
    → 1.0 rad/s 0.0281。动/静摩擦比 ≈ **{robust['dip']/STICTION:.2f}**。
-   拟合出的 Stribeck 宽度 vs ≈ {vs:.4f} rad/s —— 比 XL330 的 0.261 rad/s **窄一个数量级以上**：
-   S288 的摩擦更接近"纯库仑 + 死区"，下凹只在很窄的低速带里。
+   **但下凹的形状参数不要当真**：同一天背靠背两次运行，拟合给出 vs = 0.0095 与 0.025、
+   alpha = 3.5 与 0.5（还贴在边界上），corr(Fc,Fs) ≈ −0.88 —— 分割本身不可辨识。
+   两次的 F(v) 在实测速度带内只差 ~1.5 mN·m，所以**模型里请用上面那张表里的稳健值**
+   （破断/平台/最低点/粘滞斜率），别用 vs/alpha 这两个形状数。
 4. **S288 摩擦显著大于 XL330**：库仑高约 {Fc/XL330['friction_base']:.1f} 倍，粘滞高约
    {Fv/XL330['friction_viscous']:.1f} 倍。**直接拿 m6.json 的摩擦参数跑 S288 会明显偏乐观**——
    sim2real 会表现为真机"比仿真更粘、低速更不走"，这正是需要用本表替换的部分。
@@ -250,22 +272,31 @@ def main():
 | `M6a_friction_fit.png` | 曲线 + 拟合 + XL330 对比 |
 | `s288_bam_friction.json` | m6 风格参数，未测项为 null，另附 `_robust` 实测块 |
 
-## 五、仍未标定（按性价比排序）
+## 五、本表之外的其它量
 
-| 项 | 手册阶段 | 现状与可得性 |
-|----|---------|-------------|
-| armature（输出端等效惯量） | M6b/估 | **未测，且不需要设备**：用已知摩擦 + 力矩阶跃测角加速度反推 J |
-| command_delay | M2 | 未测。本机 4 kHz 请求-响应，时间分辨率约 0.25 ms，足够 |
-| backlash / 齿轮弹性 | M7 | **首测发现 0.5–1.7° 的位置相关偏差**，与"输出端编码器消除反冲"的说法不完全一致，需稳定后重测 |
-| q_offset（零点） | M1 | 转子零点与输出端编码器静态差约 0.5° |
-| 电压敏感性 | M3 | 未测：只有 12 V 电源，母线读数分辨率 0.5 V，太粗 |
-| 最大力矩/电流限幅 | M4 | 未测：需砝码或堵转装置（手册称 0.32 A 限流） |
+动力学部分（延迟、传动刚度、回差、惯量）已单独标定，本表不重复：
+见 `S288_dynamics_测量记录.md`，机器可读值在 `s288_bam.json`。
+
+仍未标定，都需要器材或另一颗舵机：
+
+| 项 | 手册阶段 | 为什么没做 |
+|----|---------|-----------|
+| 电压敏感性 | M3 | 只有 12 V 定值电源；母线反馈分辨率 0.5 V，太粗 |
+| 最大力矩 / 电流限幅 | M4 | 需要堵转（砝码或夹钳）**并且要读电源电流** —— 舵机反馈帧里没有电流字段，"反馈电流(A)" 只能来自电源显示 |
+| 传动刚度 | 需要**夹死输出轴 + 在输出端施加已知外部力矩**（砝码/力臂），破断以下的双编码器法不可复现（第二节） |
+| 单元间个体差异 | 手上只有一颗 S288；方法与批量脚本见 `docs/S288_个体差异测试方法.md` |
 """
-    mdp = os.path.join(DATA, "S288_BAM_汇总表.md")
+
+    mdp = os.path.join(a.out_dir, f"S288_BAM_汇总表{suffix}.md")
     with open(mdp, "w") as f:
         f.write(md)
 
     print(f"\nplot    : {png}\njson    : {js}\nmarkdown: {mdp}")
+    emit_result("friction_fit", tag=a.tag or None, curve_csv=path, stiction=STICTION,
+                Fc=float(Fc), Fs=float(Fs), vs=float(vs), alpha=float(alpha), Fv=float(Fv),
+                err=dict(zip(("Fc", "Fs", "vs", "alpha", "Fv"), (float(e) for e in err))),
+                rms_residual_nm=float(rms), corr_Fc_Fs=float(corr),
+                robust=robust, png=png, json=js, markdown=mdp)
 
 
 if __name__ == "__main__":

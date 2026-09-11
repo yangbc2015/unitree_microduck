@@ -33,13 +33,34 @@
     "plateau_torque_0.03_0.4": 0.0205,
     "viscous_slope_0.4_1.2": 0.0096,
     "torque_offset_bias": -0.003,
-    "torsion_stiffness_out": 1600.0,
-    "torsion_stiffness_rotor": 0.019,
+    "torsion_stiffness_out": null,
+    "torsion_stiffness_rotor": null,
+    "torsion_stiffness_note": "not measured: a stiffness read from the sub-breakaway sweep is not reproducible. One run showed the shaft provably still with 1.5e-5 rad of rotor wind-up (~1600 N.m/rad), but repeats moved the OUTPUT encoder 4.5 mrad in the OPPOSITE direction -- body reaction/creep, not a spring -- with gap scatter (1.5-2.0 mrad) the size of the excursion. Treat the drivetrain as rigid and model the 0.0184 rad of play instead. The tool refuses to print a number in this condition.",
     "rotor_vs_out_encoder_offset": -0.0285,
     "backlash_spread": [0.0177, 0.0192],
     "armature_range": [0.0004, 0.0006],
     "armature_rotor_equiv": 6.1e-09,
-    "kt_implied_by_manual_stall_data": 0.001
+    "kt_implied_by_manual_stall_data": 0.001,
+    "stribeck_repeatability": {
+      "_what": "the decomposition is not stable across runs, even though F(v) itself is. Same unit, same 9 speeds, same fit code.",
+      "run1_20260911_193450_published": {"Fc": 0.0187, "Fs": 0.014193, "vs": 0.009459, "alpha": 3.4775, "Fv": 0.010859, "corr_Fc_Fs": -0.99},
+      "run2_20260911_2012xx": {"Fc": 0.015597, "Fs": 0.021223, "vs": 0.023004, "alpha": 0.5, "Fv": 0.013284, "corr_Fc_Fs": -0.82},
+      "run2b_20260911_2014xx": {"Fc": 0.0153815, "Fs": 0.0199239, "vs": 0.025353, "alpha": 0.5, "Fv": 0.0138907, "corr_Fc_Fs": -0.879},
+      "parameters_wander": "vs 0.0095 -> 0.025, alpha 3.5 -> 0.5 (on the fit's lower bound), corr(Fc,Fs) -0.82..-0.99: the Fc/Fs split and the dip width trade off along a flat direction. Runs 2 and 2b agree with each other to 2-5%.",
+      "in_band_difference": "max |dF| = 2.9 mN.m at v=0.038 rad/s (the dip); <=1.8 mN.m elsewhere in 0.0009-1.49 rad/s. Against F ~ 20-35 mN.m that is ~10% worst case.",
+      "v_to_zero_extrapolation": "run1 -> Fc+Fs = 0.03289 against a directly measured stall plateau of 0.03290 (4 decimals). runs 2/2b -> 0.03682/0.03531, 8-12% high, even though their own measured stall points are 0.0327/0.0330. This is why run1 is the published decomposition.",
+      "advice": "for MuJoCo drive the model from the measurement, not the decomposition: frictionloss = the stall plateau (0.0329, repeatability 0.7%), damping = the viscous slope (0.0079 by the last pair, but 13.8% repeatability -- indicative only), and treat alpha/vs as uncertain"
+    },
+    "within_unit_repeat_pct": {
+      "_what": "S288-01 measured twice back to back, in two sessions with different thermal history. Numbers are the larger difference of the two pairs, as % of the mean. Unit-to-unit spread below this is not a difference.",
+      "command_delay_ms": 2.1, "torque_rise_tau_ms": 3.6, "backlash_rad": 3.4,
+      "encoder_offset_deg": 2.7, "stall_plateau": 6.9, "friction_dip": 2.0,
+      "Fc": 11.7, "Fs": 14.0, "Fv": 22.2, "viscous_slope_0.4_1.2": 47.3,
+      "armature": 26.8, "torsion_stiffness": null,
+      "_calm_pair": "the second pair (servo already hot, same session) came out much tighter: delay 0.0%, tau 3.6%, backlash 1.8%, encoder offset 0.3%, stall 0.7%, dip 0.6%, Fc 2.1%, Fs 2.2%, Fv 4.9%, viscous slope 13.8%, armature 7.4%",
+      "_reading": "the two pairs disagree about their own repeatability, which is the point of doing them: the stable quantities (delay, tau, backlash, encoder offset, stall, dip) stayed under 4% in both, the fitted friction split and the armature move with how warm the servo is, and the viscous slope is the least reliable of all",
+      "_unusable": ["viscous_slope_0.4_1.2 (the 0.6-1.5 rad/s points are noisy: torque sd ~110 counts on a free-housing bench)", "torsion_stiffness (see torsion_stiffness_note)"]
+    }
   },
 
   "_measurement": {

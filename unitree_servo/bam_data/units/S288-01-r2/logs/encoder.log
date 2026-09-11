@@ -1,0 +1,10 @@
+/dev/unitree_servo @ 6000000, id 0
+M1/M7: step 0 -> +10deg -> 0 -> -10deg -> 0, compare转子 vs 输出端编码器
+  target   +0.00deg -> 转子(输出端等效) -0.06088 rad /  -3.488deg | 输出端编码器 6.23180 rad / +357.056deg | 差 -360.5439deg
+  target  +10.00deg -> 转子(输出端等效) +0.04278 rad /  +2.451deg | 输出端编码器 0.08590 rad /  +4.922deg | 差 -2.4705deg
+  target   +0.00deg -> 转子(输出端等效) +0.02421 rad /  +1.387deg | 输出端编码器 0.04909 rad /  +2.812deg | 差 -1.4252deg
+  target  -10.00deg -> 转子(输出端等效) -0.06488 rad /  -3.718deg | 输出端编码器 6.25251 rad / +358.242deg | 差 -361.9598deg
+  target   +0.00deg -> 转子(输出端等效) -0.03757 rad /  -2.152deg | 输出端编码器 6.25404 rad / +358.330deg | 差 -360.4825deg
+raw log: /home/jetson/Desktop/microduck/unitree_servo/bam_data/M1M7_encoder_id0_20260911_201831.csv
+@@RESULT@@ {"case_c": 61, "id": 0, "kind": "encoder", "kp": 2.0, "points": [{"out_enc_rad": 6.231796950785418, "rotor_out_rad": -0.060881613888742296, "target_rad": 0.0}, {"out_enc_rad": 0.0859029241215959, "rotor_out_rad": 0.042784370461489585, "target_rad": 0.1745}, {"out_enc_rad": 0.04908738521234052, "rotor_out_rad": 0.024213666173674545, "target_rad": 0.0}, {"out_enc_rad": 6.252505691421874, "rotor_out_rad": -0.06488408709060281, "target_rad": -0.1745}, {"out_enc_rad": 6.254039672209759, "rotor_out_rad": -0.0375663263985224, "target_rad": 0.0}], "raw_log": "/home/jetson/Desktop/microduck/unitree_servo/bam_data/M1M7_encoder_id0_20260911_201831.csv", "supply_v": 12.5}
+servo parked (mode 0)

@@ -1,0 +1,19 @@
+/dev/unitree_servo @ 6000000, id 0
+command delay: tor +0.02 -> -0.02 N.m (below the 0.0365 N.m breakaway torque, so nothing moves), 40 trials, 20 frames before / 60 after the step
+
+  frame cadence: 0.1603 ms  (6239 Hz)
+  step seen by the feedback: 36.6 counts = 41.27 mN.m output (commanded 40 mN.m -- so the reported torque tracks the command to within 1.27 mN.m)
+  first departure  : min 0.4372  median 0.5719  mean 0.6256  max 3.4151  ms   (one frame = 0.160 ms)
+  reaches 90%      : min 1.2554  median 1.6318  mean 1.8789  max 5.0797  ms
+
+  fit on 1028 raw samples from 80 transitions
+    transport delay td  = 0.470 ms   (within 10% of best: 0.44-0.50 ms)
+    torque rise tau     = 0.560 ms   -> 10-90% rise 1.232 ms
+    amplitude A         = 37.56 counts = 42.30 mN.m output (commanded 40 mN.m)
+    residual rms        = 2.22 counts (feedback noise is ~1 count)
+  -> a first-order torque rise of this shape is what a BAM actuator model needs; the delay is the transport part in front of it.
+@@RESULT@@ {"amp_out_mnm": 42.30189811888888, "cadence_ms": 0.16029349944801652, "case_c": 62, "kind": "delay", "merr": 0, "n_samples": 1028, "n_transitions": 80, "raw_log": "/home/jetson/Desktop/microduck/unitree_servo/bam_data/M2_delay_id0_20260911_201931.csv", "rise_1090_ms": 1.2320000000000004, "rms_counts": 2.217599908004217, "supply_v": 12.5, "tau_cmd_nm": 0.02, "tau_ms": 0.5600000000000002, "td_band": [0.44, 0.5], "td_ms": 0.47000000000000003}
+
+  raw: /home/jetson/Desktop/microduck/unitree_servo/bam_data/M2_delay_id0_20260911_201931.csv
+  NOTE: measured host-side, so it includes USB-CDC and scheduling jitter. That is the end-to-end figure a sim wants, not a firmware-only constant.
+servo parked (mode 0)

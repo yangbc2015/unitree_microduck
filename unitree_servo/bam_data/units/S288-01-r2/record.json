@@ -1,0 +1,453 @@
+{
+  "schema": "s288-unit-record/1",
+  "label": "S288-01-r2",
+  "motor_id": 0,
+  "when": "2026-09-11T20:20:04",
+  "how_identified": "operator label. The protocol exposes no serial number, so this identity is only as good as the sticker someone put on the case.",
+  "context": {
+    "supply_v": 12.0,
+    "ambient_c": 24.0,
+    "psu": "KORAD KA3005P",
+    "adapter": "Unitree AT32 single-bus->USB (2e3c:7640)",
+    "firmware": "unknown (needs the Windows GUI)",
+    "operator": "jetson",
+    "notes": "repeat of S288-01, back to back",
+    "torque_source": "servo's own rotor torque feedback, 256000 counts = 1 N.m"
+  },
+  "steps": {
+    "encoder": {
+      "case_c": 61,
+      "id": 0,
+      "kind": "encoder",
+      "kp": 2.0,
+      "points": [
+        {
+          "out_enc_rad": 6.231796950785418,
+          "rotor_out_rad": -0.060881613888742296,
+          "target_rad": 0.0
+        },
+        {
+          "out_enc_rad": 0.0859029241215959,
+          "rotor_out_rad": 0.042784370461489585,
+          "target_rad": 0.1745
+        },
+        {
+          "out_enc_rad": 0.04908738521234052,
+          "rotor_out_rad": 0.024213666173674545,
+          "target_rad": 0.0
+        },
+        {
+          "out_enc_rad": 6.252505691421874,
+          "rotor_out_rad": -0.06488408709060281,
+          "target_rad": -0.1745
+        },
+        {
+          "out_enc_rad": 6.254039672209759,
+          "rotor_out_rad": -0.0375663263985224,
+          "target_rad": 0.0
+        }
+      ],
+      "raw_log": "/home/jetson/Desktop/microduck/unitree_servo/bam_data/M1M7_encoder_id0_20260911_201831.csv",
+      "supply_v": 12.5
+    },
+    "friction_sweep": {
+      "case_c": 62.0,
+      "curve_csv": "/home/jetson/Desktop/microduck/unitree_servo/bam_data/M6a_friction_curve_id0.csv",
+      "f_out_nm": [
+        0.03298851101016175,
+        0.020711101195402915,
+        0.02167140659912623,
+        0.020031667880398386,
+        0.019723070687948173,
+        0.02098380781704174,
+        0.023892450518865935,
+        0.026837642228841985,
+        0.036423019466929316
+      ],
+      "gravity_bias_out_nm": [
+        -0.00440029049035388,
+        -0.0020773087904260184,
+        -0.0023122727332618603,
+        -0.0009591725301945173,
+        5.15909071745002e-05,
+        -0.001299360508122557,
+        -0.001082758859353861,
+        -0.0019628966202023396,
+        0.00026060412510706295
+      ],
+      "id": 0,
+      "kd": 2.0,
+      "kind": "friction_sweep",
+      "n_records": 36,
+      "raw_log": "/home/jetson/Desktop/microduck/unitree_servo/bam_data/M6a_friction_sweep_id0_20260911_201834.csv",
+      "supply_v": 12.222222222222221,
+      "v_cmd": [
+        0.02,
+        0.04,
+        0.07,
+        0.12,
+        0.2,
+        0.35,
+        0.6,
+        1.0,
+        1.5
+      ],
+      "v_out": [
+        0.00043581125343759614,
+        0.03625322589967765,
+        0.061684688270869203,
+        0.1137836272305008,
+        0.19011966032930783,
+        0.3433548088244237,
+        0.5898177787933957,
+        0.989272233948815,
+        1.4807893314776566
+      ]
+    },
+    "breakaway": {
+      "case_c": 63,
+      "detect_rad": 0.02,
+      "id": 0,
+      "kind": "breakaway",
+      "onset_out_nm": {
+        "+": 0.04,
+        "-": 0.04
+      },
+      "raw_log": "/home/jetson/Desktop/microduck/unitree_servo/bam_data/M4_breakaway_id0_20260911_201903.csv",
+      "step": 0.005,
+      "supply_v": 12.0,
+      "tmax": 0.06
+    },
+    "friction_fit": {
+      "Fc": 0.015701495782461595,
+      "Fs": 0.01949338399543204,
+      "Fv": 0.013231507709564676,
+      "alpha": 0.5000000000000001,
+      "corr_Fc_Fs": -0.8875478567837939,
+      "curve_csv": "/home/jetson/Desktop/microduck/unitree_servo/bam_data/units/S288-01-r2/M6a_friction_curve.csv",
+      "err": {
+        "Fc": 0.0034819875602041745,
+        "Fs": 0.00949389673276367,
+        "Fv": 0.0028509774152122498,
+        "alpha": 0.488550715867414,
+        "vs": 0.021739765069851827
+      },
+      "json": "/home/jetson/Desktop/microduck/unitree_servo/bam_data/units/S288-01-r2/s288_bam_friction_S288-01-r2.json",
+      "kind": "friction_fit",
+      "markdown": "/home/jetson/Desktop/microduck/unitree_servo/bam_data/units/S288-01-r2/S288_BAM_汇总表_S288-01-r2.md",
+      "png": "/home/jetson/Desktop/microduck/unitree_servo/bam_data/units/S288-01-r2/M6a_friction_fit_S288-01-r2.png",
+      "rms_residual_nm": 0.0009793386754188202,
+      "robust": {
+        "dip": 0.019723070687948173,
+        "dip_v": 0.19011966032930783,
+        "plateau": 0.020624210835983488,
+        "stall_plateau": 0.03298851101016175,
+        "stiction": 0.04,
+        "viscous_slope": 0.007373035078129593
+      },
+      "stiction": 0.04,
+      "tag": "S288-01-r2",
+      "vs": 0.025741788576982925
+    },
+    "delay": {
+      "amp_out_mnm": 42.30189811888888,
+      "cadence_ms": 0.16029349944801652,
+      "case_c": 62,
+      "kind": "delay",
+      "merr": 0,
+      "n_samples": 1028,
+      "n_transitions": 80,
+      "raw_log": "/home/jetson/Desktop/microduck/unitree_servo/bam_data/M2_delay_id0_20260911_201931.csv",
+      "rise_1090_ms": 1.2320000000000004,
+      "rms_counts": 2.217599908004217,
+      "supply_v": 12.5,
+      "tau_cmd_nm": 0.02,
+      "tau_ms": 0.5600000000000002,
+      "td_band": [
+        0.44,
+        0.5
+      ],
+      "td_ms": 0.47000000000000003
+    },
+    "compliance": {
+      "case_c": 62,
+      "gap_scatter_rad": 0.0002999522787819589,
+      "kind": "compliance",
+      "merr": 0,
+      "outpos_lsb_rad": 0.0007669903939428206,
+      "points": [
+        [
+          0.0,
+          -0.0017628295713912549,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.004,
+          0.00023719588286846518,
+          -1.5549989389337937e-05,
+          2.377375044648744e-05,
+          -3.932373983582538e-05
+        ],
+        [
+          0.008,
+          0.0034025055381322186,
+          -1.5657413362180073e-05,
+          -5.903215050739874e-05,
+          4.337473714521867e-05
+        ],
+        [
+          0.012,
+          0.008714643234243015,
+          -1.546699038047772e-05,
+          -0.00011660461902884833,
+          0.00010113762864837061
+        ],
+        [
+          0.016,
+          0.011234836804609964,
+          -1.4473288633423675e-05,
+          -1.3027107508278846e-05,
+          -1.4461811251448298e-06
+        ],
+        [
+          0.02,
+          0.015719186806401077,
+          -2.2407777910404825e-06,
+          -2.5760642380134868e-05,
+          2.3519864589094386e-05
+        ],
+        [
+          0.024,
+          0.018919782218156416,
+          1.646742689871694e-05,
+          -2.4014955806173077e-05,
+          4.048238270489002e-05
+        ],
+        [
+          0.028,
+          0.02326727583302384,
+          0.000346223088958722,
+          0.00028996483138232776,
+          5.6258257576394244e-05
+        ],
+        [
+          0.032,
+          0.02612128977927228,
+          0.0015228839323938037,
+          0.002407918853824853,
+          -0.0008850349214310493
+        ],
+        [
+          0.0,
+          -0.002543643904320988,
+          0.0013837503462471729,
+          0.0019372228016116821,
+          -0.0005534724553645093
+        ],
+        [
+          -0.004,
+          -0.008642582258095381,
+          0.0009580257995279867,
+          0.0011877071809927031,
+          -0.0002296813814647164
+        ],
+        [
+          -0.008,
+          -0.01188855075972174,
+          0.0004201834357137474,
+          0.00083882091991061,
+          -0.00041863748419686264
+        ],
+        [
+          -0.012,
+          -0.015367247997699016,
+          -0.00021453698127395227,
+          0.0007043648168583161,
+          -0.0009189017981322684
+        ],
+        [
+          -0.016,
+          -0.018610367807889987,
+          -0.0005859670211738888,
+          0.0008822092292577466,
+          -0.0014681762504316354
+        ],
+        [
+          -0.02,
+          -0.02360981160470267,
+          -0.0011905201041458868,
+          0.001195067429232921,
+          -0.002385587533378808
+        ],
+        [
+          -0.024,
+          -0.025860573515229895,
+          -0.0015927069198904409,
+          0.0018074280680586696,
+          -0.0034001349879491105
+        ],
+        [
+          -0.028,
+          -0.030847828040557294,
+          -0.002353180171695529,
+          0.003158584128229336,
+          -0.005511764299924865
+        ],
+        [
+          -0.032,
+          -0.03404178097850938,
+          -0.0025080831558076944,
+          0.0034318083157014456,
+          -0.00593989147150914
+        ],
+        [
+          0.0,
+          -0.0019436646150349317,
+          -0.002456042254799895,
+          0.0031815289782812783,
+          -0.005637571233081173
+        ]
+      ],
+      "raw_log": "/home/jetson/Desktop/microduck/unitree_servo/bam_data/M7_compliance_id0_20260911_201934.csv",
+      "rotor_lsb_out_rad": 6.649731187673233e-07,
+      "step": 0.004,
+      "stiffness_lower_bound_nm_rad": null,
+      "stiffness_out_nm_rad": null,
+      "stiffness_rotor_nm_rad": null,
+      "supply_v": 12.5,
+      "tmax": 0.032,
+      "unusable_directions": {
+        "+": {
+          "output_moved_rad": 0.002407918853824853,
+          "tau_span_nm": 0.025884093896403816
+        },
+        "-": {
+          "output_moved_rad": 0.0034318083157014456,
+          "tau_span_nm": 0.025399198720413997
+        }
+      },
+      "verdict": "not measured (reaction/creep dominates)"
+    },
+    "backlash": {
+      "case_c": 62,
+      "delta_rad": 0.1745,
+      "hysteresis_rad": 0.01672322263427543,
+      "hysteresis_spread": [
+        0.015118229897650437,
+        0.018579693203724545
+      ],
+      "kind": "backlash",
+      "merr": 0,
+      "offset_deg": -1.3093550228939397,
+      "raw_log": "/home/jetson/Desktop/microduck/unitree_servo/bam_data/M7_backlash_id0_20260911_201939.csv",
+      "settle_s": 1.8,
+      "supply_v": 12.5
+    },
+    "inertia": {
+      "J_out": 0.0007097559751664099,
+      "J_per_tau": [
+        0.0003903070566918608,
+        0.0008547952187407164,
+        0.0007097559751664099
+      ],
+      "J_rotor": 8.536058240848091e-09,
+      "case_c": 62,
+      "friction_used": {
+        "Fc": 0.0157015,
+        "Fs": 0.0194934,
+        "Fv": 0.0132315,
+        "alpha": 0.5,
+        "vs": 0.0257418
+      },
+      "kind": "inertia",
+      "limit_rad": 2.0,
+      "merr": 0,
+      "raw_log": "/home/jetson/Desktop/microduck/unitree_servo/bam_data/M6b_inertia_id0_20260911_201957.csv",
+      "supply_v": 12.5,
+      "taus": [
+        0.05,
+        0.06,
+        0.07
+      ],
+      "vmax": 1.5,
+      "win": 20
+    }
+  },
+  "steps_failed": [],
+  "friction_used_for_inertia": {
+    "Fc": 0.015701495782461595,
+    "Fs": 0.01949338399543204,
+    "vs": 0.025741788576982925,
+    "alpha": 0.5000000000000001,
+    "Fv": 0.013231507709564676
+  },
+  "artifacts": [
+    {
+      "path": "bam_data/units/S288-01-r2/M6a_friction_curve.csv",
+      "bytes": 831,
+      "sha256": "a543d5e0902e70b94743fa2645a79ad92b34c100f55a2a8d59e8bcb157ac5d0c"
+    },
+    {
+      "path": "bam_data/units/S288-01-r2/M6a_friction_fit_S288-01-r2.png",
+      "bytes": 145060,
+      "sha256": "5a75e60f8a74762ac736e1c53a107d7c02fac1bfe6514b8cfb5e82a770ed581c"
+    },
+    {
+      "path": "bam_data/units/S288-01-r2/S288_BAM_汇总表_S288-01-r2.md",
+      "bytes": 5097,
+      "sha256": "bc634c4d2ad1334b15079e6f82ff9b432d02f432de2698b8a30996f9808d052d"
+    },
+    {
+      "path": "bam_data/units/S288-01-r2/s288_bam_friction_S288-01-r2.json",
+      "bytes": 1544,
+      "sha256": "c1239d97eb0f234262ba2abd709280eaf1e1d1c620c42213d1e9b1fb382b5fb7"
+    },
+    {
+      "path": "bam_data/units/S288-01-r2/logs/backlash.log",
+      "bytes": 1805,
+      "sha256": "d5b570a4a845e3c09398f0ad72dc6144eb46b5b795e799ecf4d7c0dcac7761f4"
+    },
+    {
+      "path": "bam_data/units/S288-01-r2/logs/breakaway.log",
+      "bytes": 1569,
+      "sha256": "9568eccedc5538cfc98884630ea2edd35b715a4b3c9bcf4be5e7ae5b7642c498"
+    },
+    {
+      "path": "bam_data/units/S288-01-r2/logs/compliance.log",
+      "bytes": 5897,
+      "sha256": "78a641690193d4ae620493049d843ca4dcc6846ab00079013c4cef549af58d1c"
+    },
+    {
+      "path": "bam_data/units/S288-01-r2/logs/delay.log",
+      "bytes": 1716,
+      "sha256": "2c91de596ccf27d5e3f6c5ddf11e5e313c3debb450cf8d39358ee60892d75eb6"
+    },
+    {
+      "path": "bam_data/units/S288-01-r2/logs/encoder.log",
+      "bytes": 1607,
+      "sha256": "798f5bea02bd37094d086cc7a10e90642e848d8c63d17aa0a4116090f8793f28"
+    },
+    {
+      "path": "bam_data/units/S288-01-r2/logs/friction_fit.log",
+      "bytes": 2818,
+      "sha256": "f89626c431dcf24462d0bcee9c77210fdb44e8170dc8639f2cf1d3a7abc73b12"
+    },
+    {
+      "path": "bam_data/units/S288-01-r2/logs/friction_sweep.log",
+      "bytes": 5933,
+      "sha256": "aa7762cdfdbf98a2b1f7528bfbb75eae5915ef687eac74ce30cc8392b27a74f5"
+    },
+    {
+      "path": "bam_data/units/S288-01-r2/logs/inertia.log",
+      "bytes": 1782,
+      "sha256": "252f3cf798c060514ff8f0b4146e1be4cb2f6c5c4ff75bc38b698b396f37cf72"
+    }
+  ],
+  "software": {
+    "git_head": "44d4723",
+    "host": "localhost.localdomain",
+    "kernel": "6.8.12-1021-tegra"
+  }
+}

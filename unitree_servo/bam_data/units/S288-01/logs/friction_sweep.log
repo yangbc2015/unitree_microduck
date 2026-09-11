@@ -1,0 +1,57 @@
+/dev/unitree_servo @ 6000000, id 0
+vel sweep: kp=0 kd=2.0, speeds [0.02, 0.04, 0.07, 0.12, 0.2, 0.35, 0.6, 1.0, 1.5] output rad/s, 2 rep, dwell 0.4s
+start pos -0.0376 rad, abort limit |dp| > 3.0 rad
+
+  v_cmd=+0.020  v_meas=+0.0002 out-rad/s  tau_rot=  +25.09 counts (+-0.5)  tau_out=+0.02826 Nm  12.0V 59C
+  v_cmd=+0.020  v_meas=+0.0000 out-rad/s  tau_rot=  +25.00 counts (+-0.5)  tau_out=+0.02816 Nm  12.5V 59C
+  v_cmd=-0.020  v_meas=-0.0019 out-rad/s  tau_rot=  -32.86 counts (+-2.1)  tau_out=-0.03701 Nm  12.5V 59C
+  v_cmd=-0.020  v_meas=-0.0001 out-rad/s  tau_rot=  -33.34 counts (+-0.5)  tau_out=-0.03755 Nm  12.5V 59C
+  v_cmd=+0.040  v_meas=+0.0381 out-rad/s  tau_rot=  +12.50 counts (+-10.8)  tau_out=+0.01408 Nm  12.0V 59C
+  v_cmd=+0.040  v_meas=+0.0324 out-rad/s  tau_rot=  +19.77 counts (+-12.6)  tau_out=+0.02227 Nm  12.0V 59C
+  v_cmd=-0.040  v_meas=-0.0406 out-rad/s  tau_rot=  -14.20 counts (+-12.9)  tau_out=-0.01599 Nm  12.5V 59C
+  v_cmd=-0.040  v_meas=-0.0336 out-rad/s  tau_rot=  -25.66 counts (+-12.1)  tau_out=-0.02890 Nm  12.0V 59C
+  v_cmd=+0.070  v_meas=+0.0604 out-rad/s  tau_rot=  +16.95 counts (+-14.1)  tau_out=+0.01909 Nm  12.5V 60C
+  v_cmd=+0.070  v_meas=+0.0599 out-rad/s  tau_rot=  +18.46 counts (+-13.4)  tau_out=+0.02079 Nm  12.0V 59C
+  v_cmd=-0.070  v_meas=-0.0618 out-rad/s  tau_rot=  -21.80 counts (+-16.0)  tau_out=-0.02455 Nm  12.0V 59C
+  v_cmd=-0.070  v_meas=-0.0640 out-rad/s  tau_rot=  -19.57 counts (+-15.5)  tau_out=-0.02205 Nm  12.0V 59C
+  v_cmd=+0.120  v_meas=+0.1120 out-rad/s  tau_rot=  +15.95 counts (+-16.1)  tau_out=+0.01796 Nm  12.0V 59C
+  v_cmd=+0.120  v_meas=+0.1112 out-rad/s  tau_rot=  +17.77 counts (+-16.4)  tau_out=+0.02002 Nm  12.5V 59C
+  v_cmd=-0.120  v_meas=-0.1158 out-rad/s  tau_rot=  -18.13 counts (+-16.2)  tau_out=-0.02042 Nm  12.5V 59C
+  v_cmd=-0.120  v_meas=-0.1160 out-rad/s  tau_rot=  -17.95 counts (+-17.6)  tau_out=-0.02022 Nm  12.5V 60C
+  v_cmd=+0.200  v_meas=+0.1879 out-rad/s  tau_rot=  +17.41 counts (+-14.5)  tau_out=+0.01961 Nm  12.0V 59C
+  v_cmd=+0.200  v_meas=+0.1879 out-rad/s  tau_rot=  +17.41 counts (+-15.1)  tau_out=+0.01961 Nm  12.0V 60C
+  v_cmd=-0.200  v_meas=-0.1925 out-rad/s  tau_rot=  -16.83 counts (+-14.0)  tau_out=-0.01896 Nm  12.5V 60C
+  v_cmd=-0.200  v_meas=-0.1919 out-rad/s  tau_rot=  -18.00 counts (+-15.2)  tau_out=-0.02027 Nm  12.0V 60C
+  v_cmd=+0.350  v_meas=+0.3429 out-rad/s  tau_rot=  +16.83 counts (+-15.5)  tau_out=+0.01895 Nm  12.5V 59C
+  v_cmd=+0.350  v_meas=+0.3412 out-rad/s  tau_rot=  +18.16 counts (+-16.0)  tau_out=+0.02046 Nm  12.0V 60C
+  v_cmd=-0.350  v_meas=-0.3460 out-rad/s  tau_rot=  -19.48 counts (+-16.2)  tau_out=-0.02195 Nm  12.0V 60C
+  v_cmd=-0.350  v_meas=-0.3440 out-rad/s  tau_rot=  -21.45 counts (+-16.0)  tau_out=-0.02416 Nm  12.0V 60C
+  v_cmd=+0.600  v_meas=+0.5893 out-rad/s  tau_rot=  +19.87 counts (+-18.8)  tau_out=+0.02238 Nm  12.5V 60C
+  v_cmd=+0.600  v_meas=+0.5869 out-rad/s  tau_rot=  +20.41 counts (+-18.5)  tau_out=+0.02299 Nm  12.0V 60C
+  v_cmd=-0.600  v_meas=-0.5917 out-rad/s  tau_rot=  -22.01 counts (+-16.2)  tau_out=-0.02479 Nm  12.5V 60C
+  v_cmd=-0.600  v_meas=-0.5917 out-rad/s  tau_rot=  -21.33 counts (+-17.0)  tau_out=-0.02402 Nm  12.5V 60C
+  v_cmd=+1.000  v_meas=+0.9890 out-rad/s  tau_rot=  +22.61 counts (+-22.8)  tau_out=+0.02546 Nm  12.0V 60C
+  v_cmd=+1.000  v_meas=+0.9887 out-rad/s  tau_rot=  +21.63 counts (+-23.3)  tau_out=+0.02436 Nm  12.5V 60C
+  v_cmd=-1.000  v_meas=-0.9902 out-rad/s  tau_rot=  -27.12 counts (+-22.5)  tau_out=-0.03055 Nm  12.5V 60C
+  v_cmd=-1.000  v_meas=-0.9906 out-rad/s  tau_rot=  -24.28 counts (+-22.1)  tau_out=-0.02735 Nm  12.5V 60C
+  v_cmd=+1.500  v_meas=+1.4917 out-rad/s  tau_rot=  +33.18 counts (+-117.8)  tau_out=+0.03738 Nm  12.5V 60C
+  v_cmd=+1.500  v_meas=+1.4867 out-rad/s  tau_rot=  +34.69 counts (+-118.4)  tau_out=+0.03907 Nm  12.5V 60C
+  v_cmd=-1.500  v_meas=-1.4762 out-rad/s  tau_rot=  -33.85 counts (+-128.9)  tau_out=-0.03813 Nm  12.0V 60C
+  v_cmd=-1.500  v_meas=-1.4839 out-rad/s  tau_rot=  -30.88 counts (+-121.0)  tau_out=-0.03478 Nm  12.0V 60C
+
+paired friction  F(v) = (tau(+v) - tau(-v)) / 2   [cancels gravity/offset]
+  v_out[rad/s]   F_rot[counts]   F_out[Nm]   gravity_bias_out[Nm]
+      0.0006         +29.07     +0.03275     -0.00453
+      0.0361         +18.03     +0.02031     -0.00214
+      0.0615         +19.19     +0.02162     -0.00168
+      0.1137         +17.45     +0.01966     -0.00067
+      0.1901         +17.41     +0.01961     -0.00000
+      0.3435         +18.98     +0.02138     -0.00168
+      0.5899         +20.90     +0.02354     -0.00086
+      0.9896         +23.91     +0.02693     -0.00202
+      1.4846         +33.15     +0.03734     +0.00088
+
+raw log: /home/jetson/Desktop/microduck/unitree_servo/bam_data/M6a_friction_sweep_id0_20260911_201700.csv
+curve  : /home/jetson/Desktop/microduck/unitree_servo/bam_data/M6a_friction_curve_id0.csv
+@@RESULT@@ {"case_c": 59.55555555555556, "curve_csv": "/home/jetson/Desktop/microduck/unitree_servo/bam_data/M6a_friction_curve_id0.csv", "f_out_nm": [0.03274542430715012, 0.02031250498815233, 0.021619017445010966, 0.019655688108260468, 0.019610688122501108, 0.021380328854022242, 0.023544967172324877, 0.026930751578623333, 0.037340621353772065], "gravity_bias_out_nm": [-0.004534409197206375, -0.002136173115153714, -0.001679880700717214, -0.0006651266519196472, -3.4979194093173002e-06, -0.0016754039604166238, -0.0008622466334696306, -0.0020176682436769265, 0.0008834608578101025], "id": 0, "kd": 2.0, "kind": "friction_sweep", "n_records": 36, "raw_log": "/home/jetson/Desktop/microduck/unitree_servo/bam_data/M6a_friction_sweep_id0_20260911_201700.csv", "supply_v": 12.25, "v_cmd": [0.02, 0.04, 0.07, 0.12, 0.2, 0.35, 0.6, 1.0, 1.5], "v_out": [0.0005652293435091099, 0.03614778310609886, 0.061526944799812, 0.11373644337993168, 0.19005347571824016, 0.3435208674507837, 0.5898782026523934, 0.9896269299672292, 1.4846475874454736]}
+servo parked (mode 0)

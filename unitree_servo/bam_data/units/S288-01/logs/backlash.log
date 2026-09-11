@@ -1,0 +1,19 @@
+/dev/unitree_servo @ 6000000, id 0
+backlash: for each target, arrive from below and from above (via target-/+0.1745 rad), 1.8s settle each time; kp=10.0 kd=1.0
+  target   +0.000deg from_below  -> rotor  -0.0061deg  output enc  +1.7625deg  gap -1.7686deg   (|v|=0.00000 rad/s)
+  target   +0.000deg from_above  -> rotor  +0.1855deg  output enc  +0.9846deg  gap -0.7991deg   (|v|=0.00000 rad/s)
+  target   +9.998deg from_below  -> rotor  +9.9967deg  output enc +11.8003deg  gap -1.8036deg   (|v|=0.00000 rad/s)
+  target   +9.998deg from_above  -> rotor +10.1776deg  output enc +11.0934deg  gap -0.9158deg   (|v|=0.00000 rad/s)
+  target   -9.998deg from_below  -> rotor -10.0091deg  output enc +351.8360deg  gap -1.8451deg   (|v|=0.00000 rad/s)
+  target   -9.998deg from_above  -> rotor  -9.8092deg  output enc +350.9659deg  gap -0.7750deg   (|v|=0.00000 rad/s)
+
+  target   +0.000deg: hysteresis -0.9696deg (+0.016922 rad)   offset -1.2839deg
+  target   +9.998deg: hysteresis -0.8877deg (+0.015494 rad)   offset -1.3597deg
+  target   -9.998deg: hysteresis -1.0701deg (+0.018677 rad)   offset -1.3101deg
+
+  backlash (|hysteresis|): mean 0.9758deg = 0.017031 rad, spread 0.015494-0.018677 rad
+  constant encoder offset: -1.3179deg
+  (the offset is alignment, the hysteresis is play -- only the second one is a backlash term in a sim)
+  raw: /home/jetson/Desktop/microduck/unitree_servo/bam_data/M7_backlash_id0_20260911_201806.csv
+@@RESULT@@ {"case_c": 61, "delta_rad": 0.1745, "hysteresis_rad": 0.01703087782864232, "hysteresis_spread": [0.015493889907036706, 0.018676663868153476], "kind": "backlash", "merr": 0, "offset_deg": -1.3178759725420055, "raw_log": "/home/jetson/Desktop/microduck/unitree_servo/bam_data/M7_backlash_id0_20260911_201806.csv", "settle_s": 1.8, "supply_v": 12.0}
+servo parked (mode 0)

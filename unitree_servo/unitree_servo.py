@@ -11,6 +11,8 @@ Packet layout (see specs/protocol.md of the upstream repo):
 
 import struct
 
+import json
+
 import serial
 
 # ==================== 协议常量 ====================
@@ -208,6 +210,19 @@ class MotorProtocolSync:
 
 
 # ==================== helpers ====================
+
+RESULT_MARK = "@@RESULT@@"
+
+
+def emit_result(kind: str, **kw) -> None:
+    """Print one machine-readable line, after the human output.
+
+    `bam_unit.py` runs these CLIs as subprocesses and reads exactly this line back, so a
+    per-unit record never depends on parsing prose. One line per measurement, always with
+    the same marker, so a missing field is loud rather than silently absent.
+    """
+    print(f"{RESULT_MARK} {json.dumps({'kind': kind, **kw}, sort_keys=True, default=float)}")
+
 
 def raw_to_vol(raw_vol: int) -> float:
     return raw_vol / 2.0

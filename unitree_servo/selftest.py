@@ -146,8 +146,12 @@ for path in ("docs/verify_official_issues_output.txt", "bam_data/s288_bam.json")
     check(f"git does NOT ignore {path}", r.returncode != 0)
 r = subprocess.run(["git", "status", "--porcelain", "--", "upstream", "docs"],
                    cwd=FOLDER, capture_output=True, text=True)
-check("git status is clean for upstream/ and docs/", r.stdout.strip() == "",
-      r.stdout.strip()[:80] or "no untracked files leaking out of the ignore rules")
+# New untracked work of our own (a doc being written right now) is fine; what must never show
+# up here is the third-party material the .gitignore is supposed to hide.
+leaks = [ln for ln in r.stdout.splitlines()
+         if any(k in ln for k in ("upstream/", ".pdf", "protocol_upstream.md"))]
+check("no third-party material appears as untracked/staged", not leaks,
+      leaks[0] if leaks else "only our own new files under docs/")
 
 print("== fetch_upstream.sh parses ==")
 r = subprocess.run(["bash", "-n", os.path.join(FOLDER, "fetch_upstream.sh")],
@@ -167,6 +171,26 @@ check("both real-frame CRC vectors MATCH the true algorithm", out.stdout.count("
       f"{out.stdout.count('MATCH')} MATCH lines")
 check("both vectors were re-derived from the frames, not hardcoded twice",
       "0x79204680" in out.stdout and "0x42DCF4D4" in out.stdout)
+
+print("== bam_unit.py's battery points at flags that actually exist ==")
+# A renamed flag in any of these scripts would only be discovered at 3am mid-battery, when
+# the step fails. Check the argv templates against each script's own --help instead.
+import bam_unit as bu                 # noqa: E402
+help_cache = {}
+for name, tmpl in bu.BATTERY:
+    script = tmpl[0]
+    if script not in help_cache:
+        r = subprocess.run([sys.executable, script, "--help"], cwd=FOLDER,
+                           capture_output=True, text=True)
+        help_cache[script] = r.stdout + r.stderr
+    flags = [x for x in tmpl[1:] if x.startswith("--")]
+    missing = [f for f in flags if f not in help_cache[script]]
+    check(f"{name}: {script} accepts {len(flags)} flags", not missing,
+          f"missing {missing}" if missing else " ".join(flags))
+check("the battery's speed set is the one behind s288_bam.json (comparable units)",
+      bu.SPEEDS == "0.02,0.04,0.07,0.12,0.2,0.35,0.6,1.0,1.5", bu.SPEEDS)
+check("every battery step can be skipped/selected by name",
+      len({n for n, _ in bu.BATTERY}) == len(bu.BATTERY))
 
 print()
 if fails:

@@ -8,7 +8,9 @@ possible: J = (tau_applied - F(v)) / alpha, and F(v) is now known.
 Sub-commands
   delay       command -> torque-applied latency, using a torque step SMALLER than the
               breakaway torque so the shaft never moves (isolates the transport/processing
-              delay from any mechanical response)
+              delay from any mechanical response). Also answers the handbook's M5 (FOC
+              current loop): a 10-90% torque rise of 1.19 ms with no overshoot means the
+              loop can be treated as an ideal torque source
   compliance  wind-up vs torque: apply +/-tau below breakaway and compare the output angle
               implied by the rotor encoder with the independent output-side encoder.
               Gives the drivetrain torsional stiffness and the hysteresis gap
@@ -16,6 +18,11 @@ Sub-commands
               two encoders -- the classic M7 test, done with the settling the first pass
               was missing
   inertia     torque step -> angular acceleration; J = (tau - F(v)) / alpha
+  sine        the same J from a position sine; only usable when J is large enough that the
+              inertial torque beats this bench's residual (it is not, for an S288)
+
+Each command ends with one `@@RESULT@@ {...}` line for bam_unit.py, and reports the case
+temperature and bus voltage it was measured at -- friction moves with both.
 
 Common trap inherited from bam_friction.py: the geared drivetrain stores elastic energy.
 Always recentre and sit at zero torque before a measurement, or the unwind is read as motion.
@@ -34,7 +41,7 @@ from typing import NamedTuple
 import serial
 
 from unitree_servo import (
-    RATIO, build_control_packet, parse_feedback_packet,
+    RATIO, build_control_packet, parse_feedback_packet, emit_result,
 )
 
 BAUD = 6_000_000
@@ -54,6 +61,33 @@ def friction_nm(v_out: float) -> float:
     a = abs(v_out)
     return FRICTION["Fc"] + FRICTION["Fs"] * math.exp(
         -(a / FRICTION["vs"]) ** FRICTION["alpha"]) + FRICTION["Fv"] * a
+
+
+def set_friction(spec):
+    """`--friction Fc,Fs,vs,alpha,Fv` overrides the built-in values.
+
+    The inertia fit subtracts F(v) from the measured torque, so measuring unit 3 with
+    unit 0's friction puts a systematic error straight into J. bam_unit.py passes each
+    unit's own freshly fitted numbers here -- that is the whole point of per-unit runs.
+    """
+    if not spec:
+        return
+    vals = [float(x) for x in spec.split(",")]
+    if len(vals) != 5:
+        raise SystemExit("--friction wants 5 comma-separated numbers: Fc,Fs,vs,alpha,Fv")
+    FRICTION.update(dict(zip(("Fc", "Fs", "vs", "alpha", "Fv"), vals)))
+
+
+def env(m, mid) -> dict:
+    """One frame of context for a per-unit record: case temperature and bus voltage.
+
+    Friction moves with both (55 -> 60 C alone shifted it by ~0.002 N.m), so a number
+    recorded without them cannot honestly be compared against another unit.
+    """
+    fb = m.frame(mid, 0, 0, 0.0, 0.0, 0.0, 0.0, 0.0)[2]
+    if not fb:
+        return {}
+    return dict(case_c=fb["Temp"], supply_v=fb["vol"], merr=fb["MError"])
 
 
 def tor_out(counts: float) -> float:
@@ -329,6 +363,11 @@ def cmd_delay(m, a):
     print(f"    residual rms        = {fit.rms:.2f} counts (feedback noise is ~1 count)")
     print("  -> a first-order torque rise of this shape is what a BAM actuator model needs; "
           "the delay is the transport part in front of it.")
+    emit_result("delay", **env(m, a.id), tau_cmd_nm=tau, td_ms=fit.td, tau_ms=fit.tau,
+                rise_1090_ms=2.2 * fit.tau, amp_out_mnm=fit.A / 256000 * RATIO * 1000,
+                rms_counts=fit.rms, n_samples=fit.n, n_transitions=len(fitted),
+                cadence_ms=cadence, td_band=list(fit.td_band) if fit.td_band else None,
+                raw_log=log.path)
     print(f"\n  raw: {log.path}")
     print("  NOTE: measured host-side, so it includes USB-CDC and scheduling jitter. "
           "That is the end-to-end figure a sim wants, not a firmware-only constant.")
@@ -378,22 +417,68 @@ def cmd_compliance(m, a):
         print(f"  tau_cmd={tau:+.4f}  reported={thr:+.5f} Nm  rotor->out {dr:+.6f} rad  "
               f"output enc {de:+.6f} rad  gap {gap:+.6f} rad ({math.degrees(gap):+.4f} deg)")
     log.close()
-    pos = [(g, t) for t, thr, dr, de, g in pts if t > 0]
-    neg = [(g, t) for t, thr, dr, de, g in pts if t < 0]
-    if len(pos) > 1 and len(neg) > 1:
-        dtau_p = pos[-1][1] - pos[0][1]
-        dgap_p = pos[-1][0] - pos[0][0]
-        dtau_n = neg[-1][1] - neg[0][1]
-        dgap_n = neg[-1][0] - neg[0][0]
-        for name, dtau, dgap in (("+", dtau_p, dgap_p), ("-", dtau_n, dgap_n)):
-            if abs(dgap) > 1e-6:
-                k = dtau / dgap
-                print(f"  {name} direction: {dtau:+.5f} Nm over {dgap:+.6f} rad "
-                      f"-> k_torsion ~ {k:+.3f} Nm/rad (output side)"
-                      f"  [= {k/RATIO/RATIO:.4g} Nm/rad rotor-side, {k:.3f} Nm/rad output]")
+    pos = [p for p in pts if p[0] > 0]        # (tau_cmd, tau_reported, d_rotor, d_outenc, gap)
+    neg = [p for p in pts if p[0] < 0]
+
+    # A stiffness only means something if the OUTER shaft provably did not move: the rotor
+    # channel then shows the wind-up directly. Two things go wrong otherwise, and both are
+    # visible in this data: the output encoder drifts the other way (body reaction / creep,
+    # up to 5 mrad), and the gap's own scatter reaches 1.5 mrad -- the same size as the
+    # deflection being looked for. So the rule is: measure only when the shaft is provably
+    # still; report a bound when the wind-up is under the rotor channel's noise; refuse
+    # otherwise, rather than printing a slope with a sign that flips between directions.
+    OUTPOS_LSB = 2 * math.pi / OUTPOS_COUNTS_PER_TURN
+    # the rotor channel's own resolution, expressed at the output: 1 count is 6.6e-7 output rad.
+    # Using the LSB (a property of the encoding) rather than the scatter of the zero-torque
+    # repeats, because those repeats drift with creep -- that drift is not noise.
+    ROTOR_LSB = 1.0 / POS_COUNTS_PER_ROT_RAD / RATIO
+    quiet = [g for (t, thr, dr, de, g) in pts if abs(de) < OUTPOS_LSB]
+    sigma_gap = statistics.pstdev(quiet) if len(quiet) > 2 else None
+
+    bounds, ks, unusable = {}, {}, {}
+    for name, branch in (("+", pos), ("-", neg)):
+        if len(branch) < 2:
+            continue
+        tau_span = max(p[1] for p in branch) - min(p[1] for p in branch)
+        de_max = max(abs(de) for (t, thr, dr, de, g) in branch)
+        dr_max = max(abs(dr) for (t, thr, dr, de, g) in branch)
+        if tau_span <= 0:
+            continue
+        if de_max > OUTPOS_LSB:
+            unusable[name] = dict(output_moved_rad=de_max, tau_span_nm=tau_span)
+            print(f"  {name} direction: the output encoder moved {de_max*1e3:.2f} mrad "
+                  f"({de_max/OUTPOS_LSB:.0f} of its {OUTPOS_LSB*1e3:.2f} mrad counts) while tau "
+                  f"went to {tau_span:+.4f} Nm -- that is reaction/creep, not wind-up, so no "
+                  f"stiffness can be read from it")
+        elif dr_max > 3 * ROTOR_LSB:
+            k = tau_span / dr_max
+            ks[name] = k
+            print(f"  {name} direction: shaft provably still, rotor-side wind-up "
+                  f"{dr_max*1e6:.1f} urad ({dr_max/ROTOR_LSB:.0f} counts of {ROTOR_LSB*1e6:.2f} "
+                  f"urad) over {tau_span:+.5f} Nm -> k_torsion ~ {k:.0f} N.m/rad (output side), "
+                  f"rotor-side {k/RATIO/RATIO:.4g} N.m/rad")
+        else:
+            bounds[name] = tau_span / (3 * ROTOR_LSB)
+            print(f"  {name} direction: shaft provably still, wind-up below 3 rotor counts "
+                  f"({3*ROTOR_LSB*1e6:.1f} urad) -> k_torsion >= {bounds[name]:.0f} N.m/rad "
+                  f"(output side)")
+    if unusable:
+        print("  -> verdict: NOT MEASURED. Whatever the gap does under load here, it is not a "
+              "spring; at the torques this servo can take, the tooth play (see the backlash "
+              "step) dominates any elastic compliance.")
     print(f"  backlash estimate (gap at tau=0, +approach minus -approach): "
           f"{pts[0][4]:+.6f} rad")
     print(f"  raw: {log.path}")
+    emit_result("compliance", **env(m, a.id), tmax=a.tmax, step=a.step,
+                outpos_lsb_rad=OUTPOS_LSB, gap_scatter_rad=sigma_gap,
+                rotor_lsb_out_rad=ROTOR_LSB,
+                stiffness_out_nm_rad=ks or None,
+                stiffness_rotor_nm_rad={n: k / RATIO / RATIO for n, k in ks.items()} or None,
+                stiffness_lower_bound_nm_rad=bounds or None,
+                unusable_directions=unusable or None,
+                verdict="not measured (reaction/creep dominates)" if unusable else "ok",
+                points=[[t, thr, dr, de, g] for t, thr, dr, de, g in pts],
+                raw_log=log.path)
 
 
 def cmd_backlash(m, a):
@@ -456,6 +541,11 @@ def cmd_backlash(m, a):
         print("  (the offset is alignment, the hysteresis is play -- only the second one is "
               "a backlash term in a sim)")
     print(f"  raw: {log.path}")
+    emit_result("backlash", **env(m, a.id), delta_rad=a.delta, settle_s=a.settle,
+                hysteresis_rad=statistics.fmean(hyst) if hyst else None,
+                hysteresis_spread=[min(hyst), max(hyst)] if hyst else None,
+                offset_deg=math.degrees(statistics.fmean(offs)) if offs else None,
+                raw_log=log.path)
 
 
 # ---------------------------------------------------------------- inertia
@@ -503,6 +593,10 @@ def cmd_sine(m, a):
     print(f"  J_rotor = {fit.J/RATIO/RATIO:.3e} kg.m^2")
     print(f"  residual rms {fit.resid_rms*1000:.3f} mN.m")
     print(f"  raw: {log.path}")
+    emit_result("sine", **env(m, a.id), amp_cmd=a.amp, freq_hz=a.freq, kp=a.kp, kd=a.kd,
+                J_out=fit.J, J_rotor=fit.J / RATIO / RATIO, r2=fit.r2,
+                alpha_rms=fit.alpha_rms, resid_mnm=fit.resid_rms * 1000, n=fit.n,
+                raw_log=log.path)
 
 
 def cmd_inertia(m, a):
@@ -590,13 +684,16 @@ def cmd_inertia(m, a):
               f"(spread {min(est):.4f}-{max(est):.4f})")
         print(f"  rotor equivalent   : J_rotor = J_out / RATIO^2 = {med/RATIO/RATIO:.3e} kg.m^2")
         print(f"  (RATIO^2 = {RATIO*RATIO:.1f})")
-        print("  Caveat: this is the joint-space inertia of THIS assembly (reflected rotor "
-              "inertia + whatever is on the shaft), and it is only meaningful with the body "
-              "restrained. Re-run with the body clamped and compare -- if the number moves, "
-              "the free-body reaction was in the path.")
+        print("  Caveat: joint-space inertia of THIS assembly (reflected rotor inertia + "
+              "whatever is on the shaft), taken from the highest-alpha windows. Alpha->0 "
+              "windows are excluded, not averaged: J = (tau-F)/alpha diverges there.")
         print(f"  raw: {log.path}")
     else:
         print("  no usable windows -- raise --taus or lower --limit")
+    emit_result("inertia", **env(m, a.id), taus=taus, vmax=a.vmax, win=a.win,
+                limit_rad=a.limit, J_out=statistics.median(est) if est else None,
+                J_rotor=statistics.median(est) / RATIO / RATIO if est else None,
+                J_per_tau=est, friction_used=dict(FRICTION), raw_log=log.path)
     park(m, a.id)
 
 
@@ -627,7 +724,11 @@ def main():
     ap.add_argument("--vmax", type=float, default=1.5,
                     help="discard windows above this speed (rad/s) -- the friction fit's range")
     ap.add_argument("--limit", type=float, default=2.0, help="abort a step past this, rad")
+    ap.add_argument("--friction", default=None,
+                    help="Fc,Fs,vs,alpha,Fv -- this unit's own fitted friction, which the "
+                         "inertia fit subtracts. Defaults to the values in this file.")
     a = ap.parse_args()
+    set_friction(a.friction)
 
     m = Link(a.port)
     print(f"{a.port} @ {BAUD}, id {a.id}")
