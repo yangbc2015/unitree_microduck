@@ -131,6 +131,15 @@ system memory still free.
 That guard is a fact about *this* board, where the model and the console share one 8 GB pool. Point
 `LLAMA_URL` at a machine that is not also running the console and there is nothing to restart.
 
+One arrangement detail worth copying: `llama-server` is **not** enabled on its own
+(`systemctl --user disable llama-server`) - it is only `Wants=`-ed by this analyser. The model
+therefore belongs to the vision loop rather than to the machine: starting the analyser alone brings
+the model up with it (measured: model `active` 5 s after the analyser starts, captions about a minute
+later once the weights are in), and `systemctl --user stop duck-vision llama-server` takes both down
+and hands ~3.6 GB back to the board - which on an 8 GB shared pool is the difference between
+`MemAvailable` 4.4 GiB and 1.4 GiB. Note the asymmetry: `Wants=` starts the model with the loop but
+does not stop it, so the stop is two units, not one.
+
 The envelope it settles into here, measured: one request every `VISION_INTERVAL` seconds (15 on this
 rig), the guard restarting the server about every five minutes, `dropped` at 0 throughout, and the
 console's meter reading 29-30 fps of 30 while the vision consumer is attached - the encoder now also
