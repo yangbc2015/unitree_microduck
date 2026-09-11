@@ -1,0 +1,55 @@
+{
+  "_comment": "Unitree S288 BAM parameters, measured on one unit (ID 0) on 2026-09-11 at 12.0 V, case 55-60 C, free shaft. Output-side N.m throughout (the gearbox is 70070/243 = 288.354:1). FOC current loop => no kt/R needed. Everything under _robust was measured without fitting; _fit_* is the model fit. See bam_data/S288_BAM_汇总表.md (friction) and bam_data/S288_dynamics_测量记录.md (delay / compliance / backlash / inertia) for the runs behind each number.",
+
+  "motor": "Unitree S288 (ID 0, firmware version not read)",
+  "ratio": 288.3539094650206,
+
+  "friction_base": 0.0187,
+  "friction_stribeck": 0.014193,
+  "friction_viscous": 0.010859,
+  "dtheta_stribeck": 0.009459,
+  "alpha": 3.4775,
+
+  "command_delay": 0.00048,
+  "torque_rise_tau": 0.00054,
+  "torque_rise_10_90": 0.00119,
+  "backlash": 0.0184,
+
+  "q_offset": -0.0285,
+  "armature": null,
+  "kt": null,
+  "R": null,
+  "load_friction_motor": null,
+  "load_friction_external": null,
+  "vin_drop_gain": null,
+
+  "_robust": {
+    "breakaway_torque": 0.0365,
+    "breakaway_bracket": [0.035, 0.0375],
+    "stall_plateau_torque": 0.0329,
+    "creep_onset_torque": 0.03,
+    "dip_torque": 0.01851,
+    "dip_speed": 0.03765,
+    "plateau_torque_0.03_0.4": 0.0205,
+    "viscous_slope_0.4_1.2": 0.0096,
+    "torque_offset_bias": -0.003,
+    "torsion_stiffness_out": 1600.0,
+    "torsion_stiffness_rotor": 0.019,
+    "rotor_vs_out_encoder_offset": -0.0285,
+    "backlash_spread": [0.0177, 0.0192]
+  },
+
+  "_measurement": {
+    "friction": "velocity sweep, kp=0 kd=2, paired +/- to cancel gravity and offset, 9 speeds; plus a pure feedforward torque ramp for stiction",
+    "command_delay": "torque step +-0.02 N.m, both below the 0.0365 N.m breakaway so the shaft cannot move; 80 transitions fitted to td + first-order rise",
+    "backlash": "each of 3 positions reached from below and from above, 1.8 s settle, |v|=0 at measure time; hysteresis = gap(from below) - gap(from above)",
+    "torque_source": "the servo's own rotor torque feedback (256000 counts = 1 N.m); it tracked the commanded feedforward to within ~2-6% with a -3 count offset",
+    "loop": "6.1-6.4 kHz blocking request/response over USB-CDC; one frame = 0.16 ms",
+    "caveats": [
+      "armature is NOT measured. A free-body servo cannot yield it: the reaction torque equals the output torque (20-120 mN.m), which is at or above what the bench can hold and always above the 0.025 N.m needed to move at all, so the housing slips. Both a torque-step and a sine method returned ~5e-4 kg.m^2 — two orders of magnitude below the ~0.1 expected from a 1.2e-6 kg.m^2 rotor reflected through 288:1 — and the torque correlated with velocity (+0.67) but not acceleration (-0.03). Clamp the body and re-run bam_dynamics.py; that number is not a property of the servo.",
+      "backlash of 0.0184 rad (1.056 deg, repeatability 0.014 deg) is measured between the rotor-derived output angle and the output-side encoder. It contradicts the statement that the output encoder removes the need for a backlash model.",
+      "q_offset here is the measured constant offset between the two encoders of this unit (-1.63 deg, varying 0.4 deg with position, which includes the 13-bit output encoder's own non-linearity) — not an absolute joint zero.",
+      "no voltage sensitivity (only a 12 V supply) and no current-limit / peak torque measurement (no weights or stall rig). Temperature drift over 55-60 C was within +/-0.002 N.m."
+    ]
+  }
+}

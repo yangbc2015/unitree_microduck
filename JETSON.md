@@ -66,7 +66,11 @@ Additive (no core changes):
   angle target can be sent, and neither documents that the CRC walks 4-byte little-endian words
   MSB-first rather than the byte stream - so no standard CRC library reproduces it. The folder also
   carries measured friction/breakaway numbers for one S288 (`bam_data/`), and a report of these
-  findings addressed to Unitree (`docs/`).
+  findings addressed to Unitree (`docs/`). Two of its measured numbers bear on the impl rather
+  than on tuning: the servo's torque rise is a **0.48 ms delay plus a first-order ~0.54 ms**, and
+  there is **1.06 deg of backlash** between the rotor-commanded position and the output shaft
+  (so a control loop that assumes the output follows the rotor command within encoder resolution
+  is assuming something this unit does not deliver).
 - IMU: **not written yet.** An LSM6DSV16X reader over I2C, feeding `Sensors.imu` from the same
   `read()`.
 - `deploy/robotd.toml`: serial port, camera device, model paths, policy slots. Installed to
