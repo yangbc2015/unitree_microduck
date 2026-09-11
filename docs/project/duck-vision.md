@@ -60,7 +60,7 @@ Everything is an environment variable, so the same checkout runs on another boar
 | `LLAMA_URL` | `http://127.0.0.1:8081/v1` | OpenAI-compatible base URL |
 | `VISION_MODEL` | first id from `/models` | model field sent; llama.cpp ignores it |
 | `VISION_PROMPT` | built-in Chinese scene prompt | sent with every analysed frame |
-| `VISION_INTERVAL` | `5` | seconds between analyses; newest frame wins, the rest are dropped |
+| `VISION_INTERVAL` | `5` | minimum seconds between analyses, the model's own latency included; newest frame wins, the rest are dropped |
 | `VISION_SAVE_DIR` | unset | save each analysed JPEG here |
 | `VISION_FPS` | `1` | frames mediad pushes; analysis does not try to keep up with more |
 | `VISION_LONGEST` | `640` | longest edge of the pushed JPEG |
@@ -127,6 +127,15 @@ the ceiling is ~8x the baseline and still leaves >2 GiB before the cap.
 
 That guard is a fact about *this* board, where the model and the console share one 8 GB pool. Point
 `LLAMA_URL` at a machine that is not also running the console and there is nothing to restart.
+
+The envelope it settles into here, measured: one request every `VISION_INTERVAL` seconds (15 on this
+rig), the guard restarting the server about every five minutes, `dropped` at 0 throughout, and the
+console's meter reading 29-30 fps of 30 while the vision consumer is attached - the encoder now also
+produces one JPEG a second, which is where that last frame goes. **The interval is the lever that
+matters for memory**, because a local llama.cpp retains ~50 MiB per request: at `5` the loop runs at
+the model's speed and the drift is three times faster, at `30` the restart is rarer and the
+description is correspondingly staler. It is also why `--interval` means *minimum spacing between
+analyses* - frames arriving inside it are dropped, and the model's own latency counts against it.
 
 ## Pitfalls
 

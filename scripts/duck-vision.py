@@ -321,10 +321,20 @@ class Server:
                     jpeg = state["latest"]
                     seq = state["seq"]
                     state["analyzed"] = seq
+                started = time.monotonic()
                 self.analyze_and_report(conn, send_lock, jpeg, seq)
                 with state_lock:
                     if state["closed"]:
                         return
+                # `--interval` is a minimum spacing between analyses, not just a wait for a frame.
+                # Frames arriving at 1 fps make the wait return immediately, so without this the loop
+                # runs at the model's own speed - and on a board where the model's memory is shared
+                # with everything else, the analyser's request rate is the lever that matters (a
+                # local llama.cpp keeps roughly 50 MiB per multimodal request and never gives it
+                # back). Frames that arrive inside the interval are dropped; newest still wins.
+                remaining = self.args.interval - (time.monotonic() - started)
+                if remaining > 0 and self.stop.wait(remaining):
+                    return
 
         worker = threading.Thread(target=analyzer, name="duck-vision-analyze", daemon=True)
         worker.start()
