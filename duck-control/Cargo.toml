@@ -46,3 +46,10 @@ serialport = { version = "4.8", default-features = false }
 # forward kinematics to find out where a joint stops, and nothing at runtime reads the XML —
 # `kinematics` embeds it with `include_str!`, so even the test needs no file on disk.
 kinematics = { path = "../kinematics" }
+
+# `imu_lsm6`'s real bus. Linux-only by construction (`i2cdev`'s `linux` module is the crate),
+# and gated rather than required: the driver's logic — init sequence, FIFO walk, the reuse of
+# `SflpDecoder` — is platform-free and tested with a fake, so `cargo test --workspace` still
+# runs on a machine with no I²C anywhere. Same boundary `tof` draws for the head IMU.
+[target.'cfg(target_os = "linux")'.dependencies]
+i2cdev = "0.6"

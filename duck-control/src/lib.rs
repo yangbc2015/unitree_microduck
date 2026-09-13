@@ -14,6 +14,9 @@ pub mod bus;
 pub mod bus_s288;
 pub mod fall;
 pub mod imu;
+/// The LSM6DSV16X over I²C, for this fork's bare module. Linux-gated at the bus, not at the
+/// logic — see the module docs for why.
+pub mod imu_lsm6;
 pub mod io;
 pub mod model;
 pub mod obs;

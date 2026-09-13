@@ -1117,6 +1117,7 @@ name = "duck-control"
 version = "0.11.0"
 dependencies = [
  "duck-ipc-proto",
+ "i2cdev",
  "kinematics",
  "libloading 0.8.9",
  "ort",
