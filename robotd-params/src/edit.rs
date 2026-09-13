@@ -1047,6 +1047,7 @@ mod tests {
                 "detect",
                 "chorale",
                 "theremin",
+                "imu",
                 "head_imu",
                 "audio",
                 "media",

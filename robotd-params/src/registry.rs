@@ -360,6 +360,17 @@ pub const REGISTRY: &[Entry] = &[
         Kind::Integer,
         "How long a note rides over a sensor dropout, milliseconds",
     ),
+    // ── [imu] ────────────────────────────────────────────────────────────────
+    entry(
+        "imu.bus",
+        Kind::Text,
+        "I²C bus the trunk LSM6DSV16X is on, e.g. /dev/i2c-1 — empty for a board with no module",
+    ),
+    entry(
+        "imu.address",
+        Kind::Integer,
+        "The module's I²C address: 106 (0x6A, SA0 low) or 107 (0x6B, SA0 high)",
+    ),
     // ── [head_imu] ───────────────────────────────────────────────────────────
     feature(
         "head_imu.enabled",

@@ -46,7 +46,7 @@ use tokio::net::{UnixListener, UnixStream};
 
 use control::{Controller, Driving, SkillTuning, Tuning};
 use intents::Intents;
-use params::{Mode, Params, Slot};
+use params::{ImuParams, Mode, Params, Slot};
 
 /// What to do when the shutdown sequence completes. Injected so the tests can observe the
 /// call instead of powering off the machine running them.
@@ -285,6 +285,41 @@ enum Command {
         #[arg(long, default_value = "2s", value_parser = parse_duration)]
         duration: Duration,
     },
+    /// Read the trunk IMU and print what it says, then exit.
+    ///
+    /// Separate from running the daemon for the same reason `init` is, only more so: it has to
+    /// work on a board with **no servos wired at all**, which is exactly the state a bare I²C
+    /// module arrives in. The daemon's own path cannot help there — `open_bus` waits for all
+    /// fifteen joints to answer before it hands anything back, so an IMU alone on the bench
+    /// would never get read.
+    ///
+    /// It touches no bus, claims no lock and serves no socket. Run it before `[imu] bus` is set
+    /// in the params file; that key is what makes the daemon install the module.
+    ImuProbe {
+        /// I²C bus device. The 40-pin header's `i2c-1` is the usual one.
+        #[arg(long, default_value = "/dev/i2c-1")]
+        bus: String,
+        /// The module's address. Its SA0 strap decides between `0x6a` and `0x6b`, and a good
+        /// module simply does not answer at the wrong one — so try both before suspecting it.
+        #[arg(long, default_value = "0x6a", value_parser = parse_u8_hex)]
+        address: u8,
+        /// How many samples to print before exiting. 20 at 50 Hz is about 0.4 s, which is long
+        /// enough to see SFLP converge and short enough not to be a wait.
+        #[arg(long, default_value_t = 20)]
+        samples: u32,
+    },
+}
+
+/// An I²C address, decimal or `0x`-prefixed hex, because both are written on the bench.
+fn parse_u8_hex(raw: &str) -> Result<u8, String> {
+    match raw
+        .strip_prefix("0x")
+        .or_else(|| raw.strip_prefix("0X"))
+    {
+        Some(hex) => u8::from_str_radix(hex, 16),
+        None => raw.parse(),
+    }
+    .map_err(|e| format!("{raw} is not an I²C address: {e}"))
 }
 
 fn parse_duration(raw: &str) -> Result<Duration, String> {
@@ -932,6 +967,16 @@ async fn main() -> ExitCode {
         params.policy.enabled = false;
     }
 
+    if let Some(Command::ImuProbe {
+        bus,
+        address,
+        samples,
+    }) = args.command.as_ref()
+    {
+        duck_ipc_proto::log_startup_identity!("robotd");
+        return run_imu_probe(bus, *address, *samples);
+    }
+
     if let Some(Command::Init { duration }) = args.command {
         // init opens the motor bus itself. Keep ownership until the whole ramp returns,
         // so neither a daemon nor another init can join it partway through.
@@ -1029,7 +1074,7 @@ fn run_init(params: &Params, duration: Duration) -> ExitCode {
     // The same open as the daemon's, startup check included: `init` is what someone reaches
     // for right after a motor swap, and it must not be the one path that refuses to bring the
     // robot up.
-    let Some(mut io) = open_bus(&params.bus.port, 0) else {
+    let Some(mut io) = open_bus(&params.bus.port, 0, &params.imu) else {
         return ExitCode::FAILURE;
     };
     if let Err(e) = io.set_torque(true) {
@@ -1140,8 +1185,9 @@ fn spawn_control_thread(
             // was the bland "control loop has not completed a cycle yet", forever, whatever
             // happened to the robot afterwards. Retrying the read alone was not enough:
             // execution never got there.
+            let imu = params.imu.clone();
             runtime.block_on(async move {
-                if let Some(io) = open_bus_waiting(&port, &state).await {
+                if let Some(io) = open_bus_waiting(&port, &state, &imu).await {
                     control_loop(io, state, intents, params, params_path, period, poweroff).await;
                 }
             });
@@ -1171,13 +1217,13 @@ type BusIo = FakeIo;
 /// to abandon the control loop over.
 ///
 /// Returns `None` only if shutdown is requested while waiting.
-async fn open_bus_waiting(port: &str, state: &RobotState) -> Option<BusIo> {
+async fn open_bus_waiting(port: &str, state: &RobotState, imu: &ImuParams) -> Option<BusIo> {
     let mut attempt = 0u32;
 
     while !state.shutdown.load(Ordering::Relaxed) {
         // Logging lives in `open_bus`, which is chatty by design on the first attempt and
         // quiet thereafter — a board waiting overnight must not fill the journal.
-        if let Some(io) = open_bus(port, attempt) {
+        if let Some(io) = open_bus(port, attempt, imu) {
             state.startup_bus_failures.store(0, Ordering::Relaxed);
             return Some(io);
         }
@@ -1212,7 +1258,7 @@ async fn open_bus_waiting(port: &str, state: &RobotState) -> Option<BusIo> {
 /// address before the servo goes on the robot. What does *not* change is the waiting behaviour,
 /// which is what a swapped-and-not-yet-powered chain needs either way.
 #[cfg(target_os = "linux")]
-fn open_bus(port: &str, attempt: u32) -> Option<BusIo> {
+fn open_bus(port: &str, attempt: u32, imu: &ImuParams) -> Option<BusIo> {
     // First attempt and every thirtieth — about one line per 30 s while waiting.
     let loud = attempt == 0 || attempt.is_multiple_of(STARTUP_READ_LOG_EVERY);
 
@@ -1241,11 +1287,172 @@ fn open_bus(port: &str, attempt: u32) -> Option<BusIo> {
             return None;
         }
     }
+    attach_imu(&mut io, imu);
     Some(io)
 }
 
+/// Attach the trunk IMU, if one is configured. **Best-effort by construction.**
+///
+/// A module that is absent, mis-addressed or dead is a line in the log and nothing more. It is
+/// a second bus and a separate failure, and it must not keep the robot off the bus it *can*
+/// talk to — which is also why there is no retry loop here to match the servo chain's. A servo
+/// chain that does not answer is a robot that cannot stand; an IMU that does not answer is a
+/// robot that cannot feel which way is down, which is a state the loop already handles on
+/// purpose. `NoImu` stays installed, `ready()` stays false, and `Safety`'s convergence gate
+/// refuses to call a fall on an orientation nobody has measured.
+///
+/// The consequence is worth stating plainly, because it is not obvious from a log line: a robot
+/// running with `NoImu` **cannot fall-detect and cannot walk**. A policy reads projected gravity
+/// from `Sensors.imu`; with no IMU that is the default upright vector forever. `robot.health`
+/// says so, and `robotd imu-probe` is what tells you whether the module or the wiring is at
+/// fault.
+fn attach_imu(io: &mut BusIo, params: &ImuParams) {
+    let Some(bus) = params.bus.as_deref() else {
+        tracing::info!("no IMU configured ([imu] bus is unset); running with NoImu");
+        return;
+    };
+
+    #[cfg(not(target_os = "linux"))]
+    {
+        tracing::error!(bus, "an IMU is configured but this platform has no I²C");
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        use duck_control::imu::SflpDecoder;
+        use duck_control::imu_lsm6::{Lsm6dsv16x, linux::LinuxI2c};
+
+        let i2c = match LinuxI2c::open(bus, params.address) {
+            Ok(i2c) => i2c,
+            Err(e) => {
+                tracing::error!(
+                    error = %e,
+                    bus,
+                    address = params.address,
+                    "cannot open the IMU bus; running with NoImu — the robot cannot fall-detect \
+                     until this answers. Is the module fitted, and is the address right (its SA0 \
+                     strap decides 0x6a or 0x6b)? `robotd imu-probe` says which."
+                );
+                return;
+            }
+        };
+        let mut dev = Lsm6dsv16x::new(i2c, SflpDecoder::DEFAULT_MOUNT);
+        match dev.configure() {
+            Ok(()) => {
+                tracing::info!(
+                    bus,
+                    address = params.address,
+                    "LSM6DSV16X configured; it converges a moment after the first tick"
+                );
+                io.set_imu(Box::new(dev));
+            }
+            Err(e) => tracing::error!(
+                error = %e,
+                bus,
+                address = params.address,
+                "the IMU answered but would not configure; running with NoImu"
+            ),
+        }
+    }
+}
+
+/// Read the trunk IMU and print what it says. Touches no bus, claims no lock, serves no socket.
+///
+/// This is the whole reason it is a subcommand rather than something the daemon does on the way
+/// up: a bare module on a bench has no servos beside it, and `open_bus` will not return until
+/// fifteen joints answer. Nothing here may depend on the robot being assembled.
+fn run_imu_probe(bus: &str, address: u8, samples: u32) -> ExitCode {
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = (bus, address, samples);
+        eprintln!("there is no I²C on this platform — run this on the board");
+        ExitCode::FAILURE
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        use duck_control::bus_s288::ImuSource;
+        use duck_control::imu::SflpDecoder;
+        use duck_control::imu_lsm6::{Lsm6dsv16x, linux::LinuxI2c};
+
+        let i2c = match LinuxI2c::open(bus, address) {
+            Ok(i2c) => i2c,
+            Err(e) => {
+                eprintln!("cannot open {bus} at {address:#04x}: {e}");
+                eprintln!(
+                    "  the module's SA0 strap decides its address — try --address 0x6b. \
+                     `i2cdetect -y -r {}` shows what is actually answering.",
+                    bus.rsplit('-').next().unwrap_or("1")
+                );
+                return ExitCode::FAILURE;
+            }
+        };
+
+        let mut dev = Lsm6dsv16x::new(i2c, SflpDecoder::DEFAULT_MOUNT);
+        if let Err(e) = dev.configure() {
+            eprintln!("the module answered but would not configure: {e}");
+            return ExitCode::FAILURE;
+        }
+        println!("{bus} at {address:#04x}: configured; sampling {samples} times");
+
+        // SFLP wants roughly a quarter second of samples before it calls its output a
+        // measurement, so the opening lines of this are expected to read `not yet`. That is the
+        // filter converging — the same interval `Safety` refuses to judge a fall inside.
+        let mut converged_after = None;
+        for n in 0..samples {
+            match dev.sample() {
+                Ok(imu) => {
+                    let ready = dev.ready();
+                    if ready && converged_after.is_none() {
+                        converged_after = Some(n);
+                    }
+                    println!(
+                        "{n:3}  {:<7}  gyro [{:+.3} {:+.3} {:+.3}]  gravity [{:+.3} {:+.3} {:+.3}]  quat [{:+.3} {:+.3} {:+.3} {:+.3}]",
+                        if ready { "ready" } else { "not yet" },
+                        imu.gyro[0],
+                        imu.gyro[1],
+                        imu.gyro[2],
+                        imu.gravity[0],
+                        imu.gravity[1],
+                        imu.gravity[2],
+                        imu.quat[0],
+                        imu.quat[1],
+                        imu.quat[2],
+                        imu.quat[3],
+                    );
+                }
+                Err(e) => {
+                    eprintln!("sample {n}: {e}");
+                    return ExitCode::FAILURE;
+                }
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        }
+
+        let health = dev.health();
+        println!(
+            "fifo: {} empty, {} unknown tag, {} short read",
+            health.empty_fifo, health.unknown_tags, health.short_reads
+        );
+        match converged_after {
+            Some(n) => {
+                println!("SFLP converged after {n} samples");
+                ExitCode::SUCCESS
+            }
+            None => {
+                println!(
+                    "SFLP never converged in {samples} samples. The usual cause is the \
+                     accelerometer not seeing gravity — check the module is level and the \
+                     accel ODR took (a wrong SFLP_ODR leaves it silent)."
+                );
+                ExitCode::FAILURE
+            }
+        }
+    }
+}
+
 #[cfg(not(target_os = "linux"))]
-fn open_bus(_port: &str, _attempt: u32) -> Option<BusIo> {
+fn open_bus(_port: &str, _attempt: u32, _imu: &ImuParams) -> Option<BusIo> {
     tracing::error!("no bus on this platform; use --fake");
     None
 }
@@ -6719,7 +6926,13 @@ mod tests {
         ));
         let waiter_state = Arc::clone(&s);
         let handle = tokio::spawn(async move {
-            open_bus_waiting("/dev/definitely-not-a-bus", &waiter_state)
+            open_bus_waiting(
+                "/dev/definitely-not-a-bus",
+                &waiter_state,
+                // No IMU configured: this test is about the servo chain, and a default
+                // `ImuParams` is what a board with no module gets anyway.
+                &ImuParams::default(),
+            )
                 .await
                 .is_none()
         });

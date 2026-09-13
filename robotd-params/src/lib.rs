@@ -60,6 +60,8 @@ pub struct Params {
     pub safety: SafetyParams,
     pub audio: AudioParams,
     pub theremin: ThereminParams,
+    /// The trunk IMU the control loop runs on. Not to be confused with `head_imu`.
+    pub imu: ImuParams,
     pub head_imu: HeadImuParams,
     pub chorale: ChoraleParams,
     pub media: MediaParams,
@@ -602,6 +604,44 @@ impl ThereminParams {
             min_zones: self.min_zones,
             statuses: self.statuses.clone(),
             hold: std::time::Duration::from_millis(self.hold_ms),
+        }
+    }
+}
+
+/// `[imu]` — the trunk LSM6DSV16X on I²C.
+///
+/// **This is not the head IMU.** `[head_imu]` is the BMI088 that `tofd` reads for the mapping
+/// work; this is the one `Sensors.imu` comes from — the gravity the fall detector thresholds
+/// on, the gyro the policy observes, the quaternion odometry integrates.
+///
+/// **Unset by default, and that is not laziness.** An unset `bus` leaves `NoImu` installed,
+/// which reports a zero sample with `ready() == false`. That is the same signal upstream's
+/// `imu_to_dxl` board gave while its filter converged, and the one `Safety`'s convergence gate
+/// already keys on — so a board with no module fitted runs the loop without pretending to know
+/// which way is down, and fall detection simply cannot fire. Setting `bus` is what asks for the
+/// module; there is no second enable flag to get out of step with.
+///
+/// A module that is present but does not answer is an error in the log and nothing more. It is
+/// a second bus and a separate failure: it must not keep the robot off the bus it *can* talk
+/// to, which is why attaching it is best-effort by construction rather than by a retry loop.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct ImuParams {
+    /// I²C bus device the module is on (`/dev/i2c-1` for the 40-pin header's bus 1), or `None`
+    /// for a board with no module.
+    pub bus: Option<String>,
+    /// The module's I²C address. Its SA0 strap decides — left floating the part answers at
+    /// `0x6a`, tied high at `0x6b` — and a module that is otherwise perfectly good will simply
+    /// not answer at the wrong one. Reading it off the schematic beats trusting a datasheet
+    /// default; `robotd imu-probe --address 0x6b` checks the other without editing this file.
+    pub address: u8,
+}
+
+impl Default for ImuParams {
+    fn default() -> Self {
+        Self {
+            bus: None,
+            address: 0x6a,
         }
     }
 }

@@ -372,6 +372,24 @@ mode = "walk"
 # coordinates. So this is a yes/no threshold rather than a dial.
 # threshold = 0.35
 
+[imu]
+# The trunk LSM6DSV16X on the 40-pin header's I²C bus. **Not the head IMU** — that is
+# `[head_imu]` below, the BMI088 `tofd` reads.
+#
+# Off by default, and that is the honest default rather than a placeholder: with no bus set,
+# `robotd` installs `NoImu`, which reports a zero sample with `ready() == false`. A board with
+# no module fitted runs the loop without pretending to know which way is down — and so cannot
+# fall-detect and cannot walk, which is what a duck with no IMU is.
+#
+# **Run `robotd imu-probe` first.** It reads the module on a bench with no servos wired, which
+# the daemon cannot — `open_bus` waits for all fifteen joints before it returns anything. It
+# prints raw gyro, projected gravity and quaternion, and says whether SFLP converged.
+#
+# bus = "/dev/i2c-1"
+# The module's SA0 strap decides its address: 106 = 0x6a (floating), 107 = 0x6b (tied high).
+# A module that is otherwise fine simply does not answer at the wrong one.
+# address = 106
+
 [head_imu]
 # The BMI088 on the head module, read by tofd and served as `head_imu.stream` — gyro,
 # acceleration and a Madgwick orientation, for the mapping work.
