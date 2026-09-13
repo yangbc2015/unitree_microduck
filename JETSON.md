@@ -91,11 +91,21 @@ Additive (no core changes):
   output shaft (so a control loop that assumes the output follows the rotor command within
   encoder resolution is assuming something this unit does not deliver). Its joint-space
   `armature` is measured too: 5e-4 kg.m^2.
-- IMU: **not written yet.** An LSM6DSV16X reader over I2C, feeding `Sensors.imu` from the same
-  `read()`. `bus_s288` already takes it behind an `ImuSource` trait, and its placeholder
-  (`NoImu`) returns the zero sample with `ready() == false` — the same signal upstream uses for a
-  filter that has not converged — so the loop keeps running and nothing pretends to know which
-  way is down until the reader lands.
+- IMU: **written, and never run against a module.** `duck-control/src/imu_lsm6.rs` reads the
+  LSM6DSV16X over I²C, feeding `Sensors.imu` from the same `read()`. `bus_s288` takes it behind
+  its `ImuSource` trait; `robotd` installs it when `[imu] bus` names a bus, and `NoImu` — the
+  zero sample with `ready() == false` — is what an unconfigured board still gets.
+  Two things about it are worth knowing before touching it:
+  **the decoder is reused, not rewritten.** The `imu_to_dxl` board was forwarding the chip's own
+  SFLP output, and `imu.rs`'s half-precision quaternion *is* SFLP's native format, so the reader
+  gathers the same twelve bytes and hands them to the existing `SflpDecoder` — mount rotation,
+  spike rejection, gravity-from-quaternion and the `ready()` contract all stay in one place.
+  **And SFLP has no output register.** The quaternion only comes out of the FIFO, which is why
+  `newest_quaternion` walks it; the gyro is read live from `OUTX_L_G` instead, because
+  `fall.rs`'s `ġ = −ω × g` needs the current rate and a batched one would be a tick stale.
+  What has not happened: `configure()` has never met the part, the mount rotation is unmeasured,
+  and whether the module answers at 0x6a or 0x6b is a datasheet default rather than something
+  read off the hardware. `robotd imu-probe` is the bench command that settles all three.
 - `duck-control/src/model.rs` + `bus.rs`: **the constants split.** `model` used to carry the
   XL330's IDs, baud rate, EEPROM register table and IMU address alongside the mechanics. Those
   are properties of one *bus*, not of the robot, so they moved next to the code that speaks them.
