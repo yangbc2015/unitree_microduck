@@ -1,14 +1,16 @@
 # S288 servo port — implementation plan
 
-> **Status, 2026-09-11.** Phase 0 (facts), 1 (`bus_s288.rs`), 3 (the `robotd` alias), 4 (the
-> constants) and 6 (metadata and docs) are done. Phase 5 is done on the software side — the
-> rail-dependent values moved, the clamp is per joint — but every one of those numbers is
-> *known*-unverified rather than tuned, and the travel limits in particular are the training
-> scene's rather than a measurement. Phase 2 (the I2C IMU) has not been started. Nothing here
-> has run against real hardware: the whole implementation has only ever seen a fake transport,
-> and the per-unit zero offsets and signs every joint needs have not been measured on the one
-> servo that exists. § Validation below is the honest to-do list. `JETSON.md` has the deltas;
-> the git log has the arguments.
+> **Status, 2026-09-15.** Phase 0 (facts), 1 (`bus_s288.rs`), 2 (the I²C IMU), 3 (the `robotd`
+> alias), 4 (the constants) and 6 (metadata and docs) are done — **the software side is whole.**
+> Phase 5 is done on the software side too, but its numbers are moved rather than tuned: every
+> one of them is *known*-unverified, and the travel limits in particular are the training scene's
+> rather than a measurement. Phase 2's reader exists, is wired into `robotd`, and has a bench
+> probe (`robotd imu-probe`) — and has still never met a module. Nothing here has run against
+> real hardware: the whole implementation has only ever seen a fake transport, and the per-unit
+> zero offsets and signs every joint needs have not been measured on the one servo that exists.
+> § Validation below is the honest to-do list. `JETSON.md` has the deltas; the git log has the
+> arguments; [`s288-mechanical.md`](s288-mechanical.md) has the mounting geometry that the
+> bracket is waiting on.
 
 Replacing the 15 Dynamixel XL330s with Unitree S288s. This is the servo row of the
 Jetson-port status table (`docs/project/jetson-port.md`), planned in `JETSON.md` § "The seam
@@ -216,3 +218,10 @@ Integration:
   not phase 5.
 - **Replacement adoption** may have no S288 equivalent. Cutting it is acceptable; pretending
   it works is not.
+- **The bracket, which is half answered.** Unitree's catalogue gives an outline and nothing else,
+  so a drawing built on it could not place a single screw — that was the largest mechanical
+  unknown in this port. The STEP model support supplied on 2026-09-14 closes the mounting half
+  (two 6 × Ø1.7 bolt circles, 15.6 mm apart) and leaves the rest: no output shaft, no thread
+  spec, no solid to check clearance against. Horn geometry is what the leg links key off, so the
+  remaining gap is not small. [`s288-mechanical.md`](s288-mechanical.md) is what settled and what
+  did not.

@@ -78,6 +78,12 @@ is commanded to and where the output shaft actually is. A control loop that assu
 follows the rotor command within encoder resolution is assuming something this servo does not
 deliver.
 
+For anything structural: Unitree's catalogue lists the S288 as 20 × 34 × 26 mm, which is enough to
+know it fits where an XL330 was and **not enough to place a screw**. Support supplied a STEP model on
+2026-09-14 and [`docs/project/s288-mechanical.md`](docs/project/s288-mechanical.md) is what came out
+of it — the outline, the two 6-hole bolt circles a bracket has to hit, and the honest list of what the
+simplification dropped (the output shaft among it).
+
 ### Building this one
 
 Two scripts, and they *are* the install — the skeleton is idempotent (the systemd units, the
@@ -98,7 +104,11 @@ daemon that changed.
 
 The camera is ported and a browser has been watching it: capture, software H.264, signalling, ICE and
 the control datachannel the console opens beside the video are all verified end to end on the board.
-The servo bus and the IMU are what is left of the port, so this board can be watched but not driven.
+**The servo bus and the IMU are now written and wired, and neither has ever met hardware.** Both sit
+behind traits a fake transport satisfies — which is what let them be built and tested on a machine
+with no serial port and no I²C — so this board is ready to be driven the moment an S288 chain and an
+LSM6DSV16X module are on it, and has not been yet. § Validation in
+[`docs/project/s288-servo-port.md`](docs/project/s288-servo-port.md) is what that depends on.
 
 **The build is not the port and the port is not the build.** Everything compiles on the board
 because the vendor-specific pieces were already reached at runtime upstream - `librknnrt.so` and the

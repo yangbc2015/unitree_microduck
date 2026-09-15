@@ -63,6 +63,17 @@ Dated records rather than reference. They describe a moment, and go stale on pur
 | [`idle-cpu.md`](project/idle-cpu.md) | What the daemons do when nobody is asking them to: four things that stopped, two that were measured and left alone, and what still wants a board. |
 | [`tof-on-demand.md`](project/tof-on-demand.md) | `tofd`'s idle 5% is nine parts head IMU to one part depth, and the IMU has no consumer. Why the laser and the unit were left alone and the IMU got a switch. |
 
+**This fork's own ports.** Upstream has never run on either of these, so the four below are the
+only record of what was measured and what is still assumption — the same "dated record" contract
+as the rest of this directory.
+
+| | |
+|---|---|
+| [`jetson-port.md`](project/jetson-port.md) | The daemons on a Jetson Orin Nano instead of the Radxa Zero 3W: the kernel and device-tree delta, and what had to be measured rather than assumed. |
+| [`s288-servo-port.md`](project/s288-servo-port.md) | Swapping Dynamixel XL330 for Unitree S288, phase by phase — the protocol, the second `RobotIo` impl, and what is still only on paper. |
+| [`s288-mechanical.md`](project/s288-mechanical.md) | The mounting geometry out of Unitree's own STEP file: the outline, the two bolt circles a bracket needs, and what the simplification dropped. |
+| [`duck-vision.md`](project/duck-vision.md) | Camera frames to a local VLM — a "describe what you see" loop that does not need a browser. |
+
 ## `ideas/` — not designed yet
 
 Holding pens. Something that is going to need a design doc, written down before it has one, so the
