@@ -54,9 +54,8 @@ S288 与 XL330 的外形和输出连接方式不同，承力连接件需要使�
 - print（本目录，见 `print/stl/` 与 `print/sldprt/`）：经过实物验证的打印件及参数。
 - assembly-drawings（TODO：`assembly-drawings/README` 未入库）：装配图、爆炸图与紧固件表。
 
-模型文件与可编辑零件：[下载入口](https://github.com/laotawayer/microduck/releases/tag/v0.1.0)。
-<p align="center">
-  <img src="../assets/images/assembly/microduck-s288-parts.jpg" alt="Microduck-S288 部分打印结构件与舵机" width="520">
-</p>
+模型文件与可编辑零件见本仓库 `print/stl/` 与 `print/sldprt/`（[下载入口](https://github.com/yangbc2015/unitree_microduck/tree/main/print)）。
+
+<!-- TODO: 打印结构件照片 assets/images/assembly/microduck-s288-parts.jpg 未入库。 -->
 
 <!-- 待补：切片方向与支撑设置截图。 -->
