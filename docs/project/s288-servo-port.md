@@ -39,7 +39,7 @@ Fill this table before writing the codec; every row has code downstream of it.
 
 | fact | XL330 value (current code) | S288 value | consumed by |
 |---|---|---|---|
-| baud rate | 1 Mbps (`model.rs:80`) | 6 Mbps planned | `open()` |
+| baud rate | 1 Mbps (`model.rs:80`) | 6 Mbps planned (bench, one servo); 4 Mbps for the 15-motor 3×5 harness — official ceiling, see Risks | `open()` |
 | factory ID / baud | 1 @ 57600 (`model.rs:85`) | ? | replacement adoption |
 | position counts/rev | 4096 (`bus.rs:480`) | ? | `read`, `write` |
 | position centre | 2048 = 0 rad, one turn | ? | `read`, `write` |
@@ -61,7 +61,9 @@ Fill this table before writing the codec; every row has code downstream of it.
 A `RobotIo` impl, shaped like `bus.rs` but self-contained. Register in
 `duck-control/src/lib.rs` as `pub mod bus_s288;`.
 
-- **Serial + framing.** Open the port at 6 Mbps with the same 30 ms read-timeout discipline
+- **Serial + framing.** Open the port at the harness baud — 6 Mbps served a bench
+  of one servo; the official ceiling for a 15-motor harness is 4 Mbps (Risks
+  below) — with the same 30 ms read-timeout discipline
   as `READ_TIMEOUT` (`bus.rs:52`). Implement the S288 frame: header, id, command, payload,
   CRC. The CRC belongs in unit tests against vectors computed from the Python demo, not in
   "it worked on the bench".
@@ -191,7 +193,10 @@ Bench (one servo, then a full bus):
   against `DEFAULT_POSITION` (phase 4).
 - Torque off → robot limp; torque on → holds. `set_gain` sweep to find the new
   limp/running pair before touching the policy.
-- Tick budget: measure a full `read()`+`write()` cycle time at 6 Mbps. The 50 Hz loop
+- Tick budget: measure a full `read()`+`write()` cycle time at the harness
+  baud — 6 Mbps on the bench, 4 Mbps if the 15-motor harness runs 3 branches × 5
+  per the official ceiling (Risks). At 4 Mbps every bit is 1.5× longer, so a
+  cycle that fits at 6 Mbps is not evidence it fits at 4. The 50 Hz loop
   affords 20 ms; `robotd`'s own five-minute loop summary and `min_achieved_hz` are the
   in-situ check.
 
@@ -216,6 +221,16 @@ Integration:
 - **No-sync_read bus.** If the S288 protocol cannot batch reads, 15 point reads + I2C IMU
   inside 20 ms at 50 Hz is the feasibility question of the whole port. Answer it in phase 1,
   not phase 5.
+- **Bus topology ceiling, now official (recorded 2026-11-02).** Unitree's own RL deployment
+  routine states, in §1.3.1 (archived at
+  [`unitree_servo/docs/宇树官方_多电机强化学习部署例程.md`](../../unitree_servo/docs/宇树官方_多电机强化学习部署例程.md)):
+  > 使用 6 Mbps 的波特率时，一般工况极限不超过 1 并 6 串，或者 2 并 4 串；使用 4 Mbps 的波特率时，不超过 1 并 8 串，或者 3 并 5 串。
+  > 如需要在一条总线上使用 15 个电机，可以将电机改成 4 Mbps 的波特率，分成 3 组，每组 5 个，3 组通信线焊接到一起，不会出现丢包问题。
+  Everything measured in `unitree_servo/` was 6 Mbps with one servo on the bench. The shipped
+  duck puts 15 motors on one harness, so the working assumption becomes **4 Mbps, 3 branches
+  × 5**, and both `open()` and the tick-budget validation must cover that baud. Whether our
+  adapter chain holds 4 Mbps cleanly, and what real per-branch packet loss looks like, is a
+  bring-up measurement — not a given.
 - **Replacement adoption** may have no S288 equivalent. Cutting it is acceptable; pretending
   it works is not.
 - **The bracket, which is half answered.** Unitree's catalogue gives an outline and nothing else,
