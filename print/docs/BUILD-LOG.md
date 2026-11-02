@@ -12,4 +12,4 @@
 
 打印文件已有版本化归档（2026-11-02）：已验证 STL 与 manifest 在 `print/stl/`，SolidWorks 零件与装配源文件在 `print/sldprt/`，整机 STEP 导出在 `print/step/`，机械文档在 `print/docs/`。机械制作过程照片、硬件采购实测与独立复现记录仍待完善。新增资料应与本配置对应，并注明测试条件和实际结果。
 
-模型兼容性和检查结果见[验证记录](docs/10-local-validation.md)。
+模型兼容性和检查结果见验证记录（TODO：`10-local-validation` 未入库）。

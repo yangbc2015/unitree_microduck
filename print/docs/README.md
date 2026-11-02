@@ -7,9 +7,7 @@
 
 
 
-<p align="center">
-  <img src="assets/images/robot/microduck-s288-assembled.jpg" alt="Microduck-S288 整机实物" width="360">
-</p>
+<!-- TODO: 整机实物照片 assets/images/robot/microduck-s288-assembled.jpg 未入库。 -->
 
 *装配完成的 Microduck-S288。*
 
@@ -17,11 +15,7 @@
 
 ## 复刻教程持续更新完善中，欢迎大家关注小红书进群交流！
 
-<p align="center">
-  <img src="assets/images/community/xiaohongshu-group-qr.jpg" alt="小红书赛博鸭友群二维码" width="320">
-</p>
-
-*群聊二维码有效期至 2026 年 11 月 13 日，失效后会更新。*
+<!-- TODO: 小红书群二维码图片 assets/images/community/xiaohongshu-group-qr.jpg 未入库。 -->
 
 
 
@@ -48,11 +42,11 @@ cd microduck-s288-open-source
 
 | 顺序 | 文档 | 这一篇带你完成什么 |
 | --- | --- | --- |
-| 1 | [选型思路](docs/DESIGN_GUIDE.md) | 为什么用这套电机和电控，哪些东西可以换，哪些变化会影响训练 |
-| 2 | [安装教程](docs/BUILD_GUIDE.md) | 电脑 USB 编号、接线测试 → 按图组装 → 整机通信复测 → 最后安装 Pi 与 IMU |
-| 3 | [系统与代码安装、关节标定](docs/SOFTWARE_GUIDE.md) | 完成 Pi 与 IMU 的系统配置、读取检查，以及关节零位和方向标定 |
-| 4 | [训练教程](docs/TRAIN_GUIDE.md) | 从一次小规模试跑开始，训练、观察动作，再导出自己的策略 |
-| 5 | [部署教程](docs/07-deployment.md) | 用预训练或自己训练的策略，先站立，再低速行走，最后键盘遥控 |
+| 1 | [选型思路](DESIGN_GUIDE.md) | 为什么用这套电机和电控，哪些东西可以换，哪些变化会影响训练 |
+| 2 | [安装教程](BUILD_GUIDE.md) | 电脑 USB 编号、接线测试 → 按图组装 → 整机通信复测 → 最后安装 Pi 与 IMU |
+| 3 | 系统与代码安装、关节标定（TODO：SOFTWARE_GUIDE 未入库） | 完成 Pi 与 IMU 的系统配置、读取检查，以及关节零位和方向标定 |
+| 4 | 训练教程（TODO：TRAIN_GUIDE 未入库） | 从一次小规模试跑开始，训练、观察动作，再导出自己的策略 |
+| 5 | 部署教程（TODO：07-deployment 未入库） | 用预训练或自己训练的策略，先站立，再低速行走，最后键盘遥控 |
 
 **只想先做出一只：**按 1 → 2 → 3 → 5 阅读，跳过训练，用配套 ONNX。
 
@@ -71,16 +65,14 @@ cd microduck-s288-open-source
 ## 代码和文件放在哪里？
 
 ```text
-software/training/       仿真模型、执行器和强化学习训练代码
-software/deployment/     树莓派运行程序、标定工具和配套 ONNX
-cad/                    结构源文件下载说明（文件通过 Release 提供）
-print/                  打印资源下载说明
-assembly-drawings/       装配图与紧固件说明（待补齐）
-docs/                   上面五篇主教程及补充资料
+print/stl/      已验证打印 STL 与 manifest
+print/sldprt/   SolidWorks 零件与装配源文件
+print/step/     整机 STEP 导出
+print/docs/     机械文档（本目录）
 ```
 
 ## 致谢与许可
 
 这个项目基于 [Pollen Robotics Microduck](https://github.com/pollen-robotics/microduck) 和 [Microduck RL](https://github.com/pollen-robotics/microduck_rl)，也用到了 mjlab、Rhoban BAM 与 UniArmL1 的工作。感谢原作者开放设计与代码，也感谢 microduck-replica 对复刻资料的整理。
 
-仓库包含不同来源的代码与资源，使用和再发布时请同时查看 [NOTICE](NOTICE.md) 与 [第三方许可说明](THIRD_PARTY_NOTICES.md)。
+仓库包含不同来源的代码与资源，使用和再发布时请同时查看 NOTICE 与第三方许可说明（TODO：两份许可文件未入库）。

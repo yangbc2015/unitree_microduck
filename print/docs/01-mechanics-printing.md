@@ -50,9 +50,9 @@ S288 与 XL330 的外形和输出连接方式不同，承力连接件需要使�
 
 ## 6. 资源位置
 
-- [cad](../cad/README.md)：可编辑设计、装配坐标与版本。
-- [print](../print/README.md)：经过实物验证的打印件及参数。
-- [assembly-drawings](../assembly-drawings/README.md)：装配图、爆炸图与紧固件表。
+- cad（TODO：`cad/README` 未入库）：可编辑设计、装配坐标与版本。
+- print（本目录，见 `print/stl/` 与 `print/sldprt/`）：经过实物验证的打印件及参数。
+- assembly-drawings（TODO：`assembly-drawings/README` 未入库）：装配图、爆炸图与紧固件表。
 
 模型文件与可编辑零件：[下载入口](https://github.com/laotawayer/microduck/releases/tag/v0.1.0)。
 <p align="center">
