@@ -53,6 +53,7 @@ SUBSYSTEM=="tty", ENV{ID_VENDOR_ID}=="2e3c", ENV{ID_MODEL_ID}=="7640", \
 | `docs/debug_manual.pdf` | 官方《电机调试助手（上位机）使用手册》 |
 | `docs/protocol_upstream.md` | 官方仓库 specs/protocol.md |
 | `docs/宇树官方_多电机强化学习部署例程.md` | **官方存档**：宇树支持页全文（1.3.1 接线与两张官方原图、零位/方向标定、61 维 rotor-only 策略契约、部署入口）；版权宇树科技，不随本仓库 Apache-2.0 授权，图与哈希见 `docs/images/` |
+| `docs/zj281136/` | **收录**：策略契约（61 维观测布局/关节顺序/M1 数值）、训练配方快照、sim2real/xl330_vs_s288/通信排查/证据等级四篇工程笔记；Apache-2.0，逐字收录，索引与意义见该目录 README |
 | `upstream/digital_servo-1.0.1/` | 官方仓库 v1.0.1（去掉 Keil 构建产物和 HAL 源码，保留 App/Core/python/specs） |
 
 ## 用法
