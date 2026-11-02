@@ -1,0 +1,692 @@
+[
+ {
+  "file": "motor_support.stl",
+  "name": "motor_support",
+  "size_mm": [
+   73.69,
+   54.39,
+   19.19
+  ],
+  "volume_mm3": 7906.6
+ },
+ {
+  "file": "banana_pcb_locker.stl",
+  "name": "banana_pcb_locker",
+  "size_mm": [
+   54.01,
+   6.66,
+   3.81
+  ],
+  "volume_mm3": 460.9
+ },
+ {
+  "file": "bearing_roll.stl",
+  "name": "bearing_roll",
+  "size_mm": [
+   23.03,
+   40.03,
+   7.03
+  ],
+  "volume_mm3": 1018.4
+ },
+ {
+  "file": "elec_rpi_robot_hat_pcb.stl",
+  "name": "elec_rpi_robot_hat_pcb",
+  "size_mm": [
+   65.02,
+   30.02,
+   0.87
+  ],
+  "volume_mm3": 1597.1
+ },
+ {
+  "file": "face_part.stl",
+  "name": "face_part",
+  "size_mm": [
+   87.32,
+   43.78,
+   12.55
+  ],
+  "volume_mm3": 5744.0
+ },
+ {
+  "file": "foot_left.stl",
+  "name": "foot_left",
+  "size_mm": [
+   40.07,
+   54.07,
+   17.17
+  ],
+  "volume_mm3": 13167.3
+ },
+ {
+  "file": "left_upper_leg.stl",
+  "name": "left_upper_leg",
+  "size_mm": [
+   61.3,
+   47.96,
+   28.07
+  ],
+  "volume_mm3": 4429.7
+ },
+ {
+  "file": "lens.stl",
+  "name": "lens",
+  "size_mm": [
+   17.02,
+   18.95,
+   17.05
+  ],
+  "volume_mm3": 2809.7
+ },
+ {
+  "file": "m12_lens_holder.stl",
+  "name": "m12_lens_holder",
+  "size_mm": [
+   24.08,
+   16.08,
+   14.88
+  ],
+  "volume_mm3": 1098.2
+ },
+ {
+  "file": "np_f970.stl",
+  "name": "np_f970",
+  "size_mm": [
+   38.53,
+   20.43,
+   70.53
+  ],
+  "volume_mm3": 52048.9
+ },
+ {
+  "file": "power_support.stl",
+  "name": "power_support",
+  "size_mm": [
+   54.54,
+   83.7,
+   10.04
+  ],
+  "volume_mm3": 10192.1
+ },
+ {
+  "file": "soft_mouth_top.stl",
+  "name": "soft_mouth_top",
+  "size_mm": [
+   87.99,
+   32.56,
+   3.03
+  ],
+  "volume_mm3": 3215.6
+ },
+ {
+  "file": "sole_left.stl",
+  "name": "sole_left",
+  "size_mm": [
+   41.47,
+   54.47,
+   14.14
+  ],
+  "volume_mm3": 6856.0
+ },
+ {
+  "file": "trunk_base.stl",
+  "name": "trunk_base",
+  "size_mm": [
+   57.03,
+   36.03,
+   7.03
+  ],
+  "volume_mm3": 2040.4
+ },
+ {
+  "file": "upper_leg_rigidity_plate.stl",
+  "name": "upper_leg_rigidity_plate",
+  "size_mm": [
+   60.23,
+   46.43,
+   5.03
+  ],
+  "volume_mm3": 1843.9
+ },
+ {
+  "file": "jaw.stl",
+  "name": "jaw",
+  "size_mm": [
+   29.99,
+   69.79,
+   92.78
+  ],
+  "volume_mm3": 9508.1
+ },
+ {
+  "file": "hip_I.stl",
+  "name": "hip_I",
+  "size_mm": [
+   32.51,
+   34.66,
+   19.06
+  ],
+  "volume_mm3": 3977.2
+ },
+ {
+  "file": "leg.stl",
+  "name": "leg",
+  "size_mm": [
+   8.02,
+   58.04,
+   20.07
+  ],
+  "volume_mm3": 3123.0
+ },
+ {
+  "file": "right_shell.stl",
+  "name": "right_shell",
+  "size_mm": [
+   42.08,
+   81.22,
+   31.99
+  ],
+  "volume_mm3": 11710.9
+ },
+ {
+  "file": "yaw_roll_motion.stl",
+  "name": "yaw_roll_motion",
+  "size_mm": [
+   34.03,
+   35.93,
+   22.53
+  ],
+  "volume_mm3": 4845.6
+ },
+ {
+  "file": "yaw2roll.stl",
+  "name": "yaw2roll",
+  "size_mm": [
+   23.08,
+   25.88,
+   20.55
+  ],
+  "volume_mm3": 2932.0
+ },
+ {
+  "file": "镜向left_shell.stl",
+  "name": "镜向left_shell",
+  "size_mm": [
+   42.12,
+   81.26,
+   34.03
+  ],
+  "volume_mm3": 12519.6
+ },
+ {
+  "file": "镜向upper_leg_rigidity_plate.stl",
+  "name": "镜向upper_leg_rigidity_plate",
+  "size_mm": [
+   60.23,
+   46.43,
+   5.03
+  ],
+  "volume_mm3": 1843.9
+ },
+ {
+  "file": "镜向left_upper_leg.stl",
+  "name": "镜向left_upper_leg",
+  "size_mm": [
+   61.3,
+   47.95,
+   28.07
+  ],
+  "volume_mm3": 4430.2
+ },
+ {
+  "file": "镜向foot_left.stl",
+  "name": "镜向foot_left",
+  "size_mm": [
+   40.07,
+   54.07,
+   17.17
+  ],
+  "volume_mm3": 13167.5
+ },
+ {
+  "file": "镜向sole_left.stl",
+  "name": "镜向sole_left",
+  "size_mm": [
+   41.47,
+   54.47,
+   14.14
+  ],
+  "volume_mm3": 6917.1
+ },
+ {
+  "file": "jaw_soft.stl",
+  "name": "jaw_soft",
+  "size_mm": [
+   87.96,
+   32.26,
+   8.44
+  ],
+  "volume_mm3": 18938.1
+ },
+ {
+  "file": "neck_holder.stl",
+  "name": "neck_holder",
+  "size_mm": [
+   20.01,
+   1.01,
+   9.01
+  ],
+  "volume_mm3": 161.4
+ },
+ {
+  "file": "noenoeil-.stl",
+  "name": "noenoeil-",
+  "size_mm": [
+   30.1,
+   9.6,
+   30.1
+  ],
+  "volume_mm3": 4255.6
+ },
+ {
+  "file": "深沟球轴承6700_0.stl",
+  "name": "深沟球轴承6700",
+  "size_mm": [
+   1.45,
+   1.43,
+   1.36
+  ],
+  "volume_mm3": 1.4
+ },
+ {
+  "file": "深沟球轴承6700_1.stl",
+  "name": "深沟球轴承6700",
+  "size_mm": [
+   1.45,
+   1.36,
+   1.44
+  ],
+  "volume_mm3": 1.4
+ },
+ {
+  "file": "深沟球轴承6700_2.stl",
+  "name": "深沟球轴承6700",
+  "size_mm": [
+   1.45,
+   1.36,
+   1.41
+  ],
+  "volume_mm3": 1.4
+ },
+ {
+  "file": "深沟球轴承6700_3.stl",
+  "name": "深沟球轴承6700",
+  "size_mm": [
+   1.45,
+   1.45,
+   1.37
+  ],
+  "volume_mm3": 1.4
+ },
+ {
+  "file": "深沟球轴承6700_4.stl",
+  "name": "深沟球轴承6700",
+  "size_mm": [
+   1.45,
+   1.45,
+   1.37
+  ],
+  "volume_mm3": 1.4
+ },
+ {
+  "file": "深沟球轴承6700_5.stl",
+  "name": "深沟球轴承6700",
+  "size_mm": [
+   1.45,
+   1.36,
+   1.41
+  ],
+  "volume_mm3": 1.4
+ },
+ {
+  "file": "深沟球轴承6700_6.stl",
+  "name": "深沟球轴承6700",
+  "size_mm": [
+   1.45,
+   1.36,
+   1.44
+  ],
+  "volume_mm3": 1.4
+ },
+ {
+  "file": "深沟球轴承6700_7.stl",
+  "name": "深沟球轴承6700",
+  "size_mm": [
+   1.45,
+   1.43,
+   1.36
+  ],
+  "volume_mm3": 1.4
+ },
+ {
+  "file": "深沟球轴承6700_8.stl",
+  "name": "深沟球轴承6700",
+  "size_mm": [
+   1.45,
+   1.44,
+   1.36
+  ],
+  "volume_mm3": 1.4
+ },
+ {
+  "file": "深沟球轴承6700_9.stl",
+  "name": "深沟球轴承6700",
+  "size_mm": [
+   1.45,
+   1.37,
+   1.37
+  ],
+  "volume_mm3": 1.4
+ },
+ {
+  "file": "深沟球轴承6700_10.stl",
+  "name": "深沟球轴承6700",
+  "size_mm": [
+   1.45,
+   1.36,
+   1.45
+  ],
+  "volume_mm3": 1.4
+ },
+ {
+  "file": "深沟球轴承6700_11.stl",
+  "name": "深沟球轴承6700",
+  "size_mm": [
+   1.45,
+   1.37,
+   1.45
+  ],
+  "volume_mm3": 1.4
+ },
+ {
+  "file": "深沟球轴承6700_12.stl",
+  "name": "深沟球轴承6700",
+  "size_mm": [
+   1.45,
+   1.37,
+   1.44
+  ],
+  "volume_mm3": 1.4
+ },
+ {
+  "file": "深沟球轴承6700_13.stl",
+  "name": "深沟球轴承6700",
+  "size_mm": [
+   1.45,
+   1.38,
+   1.36
+  ],
+  "volume_mm3": 1.4
+ },
+ {
+  "file": "深沟球轴承6700_14.stl",
+  "name": "深沟球轴承6700",
+  "size_mm": [
+   1.45,
+   1.45,
+   1.36
+  ],
+  "volume_mm3": 1.4
+ },
+ {
+  "file": "深沟球轴承6700_15.stl",
+  "name": "深沟球轴承6700",
+  "size_mm": [
+   1.45,
+   1.45,
+   1.36
+  ],
+  "volume_mm3": 1.4
+ },
+ {
+  "file": "深沟球轴承6700_16.stl",
+  "name": "深沟球轴承6700",
+  "size_mm": [
+   1.45,
+   1.38,
+   1.36
+  ],
+  "volume_mm3": 1.4
+ },
+ {
+  "file": "深沟球轴承6700_17.stl",
+  "name": "深沟球轴承6700",
+  "size_mm": [
+   1.45,
+   1.37,
+   1.44
+  ],
+  "volume_mm3": 1.4
+ },
+ {
+  "file": "深沟球轴承6700_18.stl",
+  "name": "深沟球轴承6700",
+  "size_mm": [
+   1.45,
+   1.37,
+   1.45
+  ],
+  "volume_mm3": 1.4
+ },
+ {
+  "file": "深沟球轴承6700_19.stl",
+  "name": "深沟球轴承6700",
+  "size_mm": [
+   1.45,
+   1.36,
+   1.45
+  ],
+  "volume_mm3": 1.4
+ },
+ {
+  "file": "深沟球轴承6700_20.stl",
+  "name": "深沟球轴承6700",
+  "size_mm": [
+   1.45,
+   1.37,
+   1.37
+  ],
+  "volume_mm3": 1.4
+ },
+ {
+  "file": "深沟球轴承6700_21.stl",
+  "name": "深沟球轴承6700",
+  "size_mm": [
+   1.45,
+   1.44,
+   1.36
+  ],
+  "volume_mm3": 1.4
+ },
+ {
+  "file": "深沟球轴承6700_22.stl",
+  "name": "深沟球轴承6700",
+  "size_mm": [
+   3.03,
+   11.4,
+   11.4
+  ],
+  "volume_mm3": 66.3
+ },
+ {
+  "file": "深沟球轴承6700_23.stl",
+  "name": "深沟球轴承6700",
+  "size_mm": [
+   3.03,
+   15.0,
+   15.03
+  ],
+  "volume_mm3": 89.0
+ },
+ {
+  "file": "深沟球轴承6700_24.stl",
+  "name": "深沟球轴承6700",
+  "size_mm": [
+   1.45,
+   1.45,
+   1.37
+  ],
+  "volume_mm3": 1.4
+ },
+ {
+  "file": "neck_pitch-1.stl",
+  "name": "neck_pitch-1",
+  "size_mm": [
+   37.07,
+   18.07,
+   27.77
+  ],
+  "volume_mm3": 5644.8
+ },
+ {
+  "file": "ankle_left.stl",
+  "name": "ankle_left",
+  "size_mm": [
+   39.54,
+   36.54,
+   25.59
+  ],
+  "volume_mm3": 6296.8
+ },
+ {
+  "file": "镜向ankle_left.stl",
+  "name": "镜向ankle_left",
+  "size_mm": [
+   39.54,
+   36.54,
+   25.59
+  ],
+  "volume_mm3": 6296.8
+ },
+ {
+  "file": "标准杯头内六角螺钉_M2x6.stl",
+  "name": "标准杯头内六角螺钉_M2x6",
+  "size_mm": [
+   3.82,
+   3.81,
+   8.02
+  ],
+  "volume_mm3": 39.4
+ },
+ {
+  "file": "标准杯头内六角螺钉_M2x5.stl",
+  "name": "标准杯头内六角螺钉_M2x5",
+  "size_mm": [
+   3.82,
+   3.81,
+   7.02
+  ],
+  "volume_mm3": 36.2
+ },
+ {
+  "file": "标准杯头内六角螺钉_M2x8.stl",
+  "name": "标准杯头内六角螺钉_M2x8",
+  "size_mm": [
+   3.82,
+   3.81,
+   10.02
+  ],
+  "volume_mm3": 45.6
+ },
+ {
+  "file": "标准杯头内六角螺钉_M2x4.stl",
+  "name": "标准杯头内六角螺钉_M2x4",
+  "size_mm": [
+   3.82,
+   3.81,
+   6.02
+  ],
+  "volume_mm3": 33.1
+ },
+ {
+  "file": "圆头内六角螺钉_M2.5x10.stl",
+  "name": "圆头内六角螺钉_M2.5x10",
+  "size_mm": [
+   4.75,
+   4.75,
+   11.65
+  ],
+  "volume_mm3": 65.9
+ },
+ {
+  "file": "w_61702-2rs1_01.stl",
+  "name": "w_61702-2rs1_01",
+  "size_mm": [
+   4.09,
+   21.09,
+   21.09
+  ],
+  "volume_mm3": 213.2
+ },
+ {
+  "file": "w_61702-2rs1_02.stl",
+  "name": "w_61702-2rs1_02",
+  "size_mm": [
+   4.08,
+   16.94,
+   16.94
+  ],
+  "volume_mm3": 176.4
+ },
+ {
+  "file": "w_61702-2rs1_03.stl",
+  "name": "w_61702-2rs1_03",
+  "size_mm": [
+   0.4,
+   19.96,
+   19.99
+  ],
+  "volume_mm3": 19.6
+ },
+ {
+  "file": "w_61702-2rs1_04.stl",
+  "name": "w_61702-2rs1_04",
+  "size_mm": [
+   0.4,
+   19.96,
+   19.99
+  ],
+  "volume_mm3": 19.6
+ },
+ {
+  "file": "w_61702-2rs1_05.stl",
+  "name": "w_61702-2rs1_05",
+  "size_mm": [
+   1.61,
+   19.61,
+   19.16
+  ],
+  "volume_mm3": 29.4
+ },
+ {
+  "file": "bottom_head_shell-2.stl",
+  "name": "bottom_head_shell-2",
+  "size_mm": [
+   91.96,
+   116.75,
+   20.5
+  ],
+  "volume_mm3": 23948.7
+ },
+ {
+  "file": "top_head_shell-2.stl",
+  "name": "top_head_shell-2",
+  "size_mm": [
+   46.78,
+   122.57,
+   92.12
+  ],
+  "volume_mm3": 30783.8
+ }
+]
