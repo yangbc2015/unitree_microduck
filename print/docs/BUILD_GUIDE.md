@@ -91,7 +91,7 @@ USB 接到电脑不等于电机已经有动力供电：电池这一支接通信�
 
 “3 并 5 串”可以这样理解：从同一个总线模块分出三条支路，每条支路依次连接五颗电机。它们仍然共用一条总线，所以三组中的 ID 也必须互不重复。
 
-<!-- TODO：图 1（分成三组连接的电机与总线模块实物照片，assets/images/motors/unitree-s288-bus-wiring.png）与图 2（3 并 5 串拓扑图，assets/images/motors/unitree-s288-bus-branches.png）未入库，来源为宇树官方文档。 -->
+图 1（分成三组连接的电机与总线模块实物照片）与图 2（3 并 5 串拓扑图，图中的 15 颗电机使用 ID 0–14）已入库：`unitree_servo/docs/images/unitree-s288-bus-wiring.png`、`unitree_servo/docs/images/unitree-s288-bus-branches.png`（宇树官方原图，含 SHA256 核对，见 `unitree_servo/docs/images/README.md`；来源为宇树官方文档）。
 
 本项目整机使用 **15 颗 S288，总线 ID 为 0–14**。其中 ID 0–13 的 14 个关节参与当前 RL，ID 14 为非 RL 附加舵机。接线与全总线测试覆盖全部 15 颗，训练和策略控制仍保持 14 个关节；关节位置与 ID 按本项目编号表对应。
 
